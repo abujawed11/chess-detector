@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python organize_dataset.py:*)",
+      "Bash(python organize_new_images.py:*)",
+      "Bash(python organize_labels.py:*)",
+      "Bash(python organize_pieces.py:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
