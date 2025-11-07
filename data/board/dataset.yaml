@@ -1,4 +1,4 @@
-path: D:/chess-detector/data/board
+path: D:/react/chess-detector/data/board
 train: images/train
 val: images/val
 names:

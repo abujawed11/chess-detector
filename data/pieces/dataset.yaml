@@ -1,16 +1,30 @@
-path: D:/chess-detector/data/pieces
+# Chess Piece Detection Dataset
+
+path: D:/react/chess-detector/data/pieces
+
 train: images/train
 val: images/val
+# test: images/test   # Uncomment if you later add a test folder
+
 names:
-  0: wK
-  1: wQ
-  2: wR
-  3: wB
-  4: wN
-  5: wP
-  6: bK
-  7: bQ
-  8: bR
-  9: bB
-  10: bN
-  11: bP
+  0: bB
+  1: bK
+  2: bN
+  3: bP
+  4: bQ
+  5: bR
+  6: wB
+  7: wK
+  8: wN
+  9: wP
+  10: wQ
+  11: wR
+
+
+
+roboflow:
+  workspace: chess-board-detector
+  project: chess-piece-detector2-ms38l
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/chess-board-detector/chess-piece-detector2-ms38l/dataset/2

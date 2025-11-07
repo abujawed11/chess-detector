@@ -214,3 +214,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+
+# Virtual environment
+venv/
+.env
+
+# YOLO runs (training results)
+runs/
+
+# Roboflow or dataset exports
+data/**/images/
+data/**/labels/
+data/**/cache.yaml
+data/**/*.zip
+
+# Temporary and system files
+__pycache__/
+*.log
+*.tmp
+*.bak
+.DS_Store
+
+# VSCode settings
+.vscode/
+
+# Backup models (optional, keep only best.pt)
+models/backups/*.zip
+
+
+# Ignore large pretrained weights
+yolov8*.pt
+yolo11*.pt
