@@ -330,6 +330,7 @@ export default function Analysis({ initialFen }) {
           fen={currentFen}
           onMove={handleMove}
           flipped={flipped}
+          bestMove={bestMove}
         />
 
         {/* Right Panel */}
@@ -361,20 +362,47 @@ export default function Analysis({ initialFen }) {
           {bestMove && (
             <div style={{
               padding: 16,
-              background: '#f9fafb',
+              background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)',
               borderRadius: 12,
-              border: '2px solid #e5e7eb'
+              border: '3px solid #22c55e',
+              boxShadow: '0 4px 12px rgba(34, 197, 94, 0.4)'
             }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Best Move:
+              <div style={{ 
+                fontSize: 14, 
+                fontWeight: 600, 
+                marginBottom: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <span>🎯 Best Move:</span>
+                <span style={{
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  background: '#22c55e',
+                  borderRadius: 4,
+                  color: '#fff',
+                  fontWeight: 700
+                }}>
+                  See arrow on board ➜
+                </span>
               </div>
               <div style={{
-                fontSize: 20,
+                fontSize: 24,
                 fontFamily: 'monospace',
                 fontWeight: 700,
-                color: '#8b5cf6'
+                color: '#15803d'
               }}>
                 {bestMove}
+              </div>
+              <div style={{
+                fontSize: 12,
+                color: '#166534',
+                marginTop: 4,
+                fontStyle: 'italic',
+                fontWeight: 600
+              }}>
+                ✨ Green arrow with pulsing animation
               </div>
             </div>
           )}
@@ -431,11 +459,12 @@ export default function Analysis({ initialFen }) {
         <strong>💡 How to use:</strong>
         <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
           <li><strong>Auto-analyze Moves</strong> (ON by default) - Classifies each move you play (Brilliant, Blunder, etc.)</li>
-          <li><strong>Show Best Move</strong> (OFF by default) - Toggle to always see the engine's best move</li>
-          <li><strong>Get Hint</strong> - Click to see best move for just ONE move (disappears after you play)</li>
+          <li><strong>Show Best Move</strong> (OFF by default) - Toggle to see a <span style={{background: '#22c55e', padding: '2px 6px', borderRadius: 3, fontWeight: 700, color: 'white'}}>green arrow ➜</span> showing the engine's best move continuously</li>
+          <li><strong>Get Hint</strong> - Click to see a <span style={{background: '#22c55e', padding: '2px 6px', borderRadius: 3, fontWeight: 700, color: 'white'}}>green arrow ➜</span> for just ONE move (disappears after you play)</li>
           <li>Click or drag pieces to make moves on the board</li>
           <li>Click on moves in the history to navigate back/forward</li>
           <li>The evaluation bar shows who has the advantage</li>
+          <li><strong>Animated pulse</strong> at the starting square helps you find the move instantly!</li>
         </ul>
       </div>
     </div>
