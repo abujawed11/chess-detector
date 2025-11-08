@@ -86,6 +86,38 @@ function validateFen(fen){
   catch(e){ return {valid:false, reason:e?.message || "Invalid FEN"}; }
 }
 
+// Smart validation: try both sides to find a legal position
+function validateAndFixSide(fen) {
+  // First try the FEN as-is
+  const result = validateFen(fen);
+  if (result.valid) {
+    return { valid: true, fen, sideChanged: false };
+  }
+
+  // If invalid, try flipping the side to move
+  const parts = fen.split(' ');
+  if (parts.length >= 2) {
+    const originalSide = parts[1];
+    const flippedSide = originalSide === 'w' ? 'b' : 'w';
+    parts[1] = flippedSide;
+    const flippedFen = parts.join(' ');
+
+    const flippedResult = validateFen(flippedFen);
+    if (flippedResult.valid) {
+      return {
+        valid: true,
+        fen: flippedFen,
+        sideChanged: true,
+        correctedSide: flippedSide,
+        reason: `Position is illegal with ${originalSide === 'w' ? 'White' : 'Black'} to move (opponent in check). Auto-corrected to ${flippedSide === 'w' ? 'White' : 'Black'} to move.`
+      };
+    }
+  }
+
+  // Both failed, return original error
+  return { valid: false, fen, sideChanged: false, reason: result.reason };
+}
+
 // Validate position rules - for placement (lenient, allows building)
 function validatePlacement(pieces, newSquare, newPiece) {
   // Create a temporary pieces object with the new piece
@@ -188,9 +220,26 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
   const [dragOverSquare, setDragOverSquare] = useState(null);
   const [dragOverBin, setDragOverBin] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
+  const [sideWarning, setSideWarning] = useState(null);
 
   const fen = useMemo(() => buildFen({ pieces, side, castling, ep }), [pieces, side, castling, ep]);
-  const fenStatus = useMemo(() => validateFen(fen), [fen]);
+  const fenStatus = useMemo(() => {
+    const result = validateAndFixSide(fen);
+
+    // If side was auto-corrected, update the state
+    if (result.sideChanged && result.correctedSide) {
+      setSideWarning(result.reason);
+      // Auto-correct the side after a brief moment
+      setTimeout(() => {
+        setSide(result.correctedSide);
+        setSideWarning(null);
+      }, 100);
+    } else {
+      setSideWarning(null);
+    }
+
+    return { valid: result.valid, reason: result.reason };
+  }, [fen]);
 
   // Validate complete position for display warnings (but don't block placement)
   useEffect(() => {
@@ -210,6 +259,28 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
   }
 
   function flipBoard(){ setFlipped(f => !f); }
+
+  function flipRanks() {
+    // Transform piece positions AND flip the board view simultaneously
+    // This keeps pieces in the same VISUAL position but changes their square labels
+    const flippedPieces = {};
+    for (const [square, piece] of Object.entries(pieces)) {
+      const file = square[0];
+      const rank = square[1];
+
+      // Flip file: a->h, b->g, c->f, d->e, e->d, f->c, g->b, h->a
+      const newFile = String.fromCharCode(97 + (7 - (file.charCodeAt(0) - 97)));
+      // Flip rank: 1->8, 2->7, 3->6, 4->5, 5->4, 6->3, 7->2, 8->1
+      const newRank = 9 - parseInt(rank, 10);
+
+      flippedPieces[`${newFile}${newRank}`] = piece;
+    }
+
+    setPieces(flippedPieces);
+    setCoordinatesFlipped(c => !c);
+    // Also flip the board view so pieces stay in same visual position
+    setFlipped(f => !f);
+  }
 
 
   function placePiece(square, piece){
@@ -459,10 +530,10 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
           borderRadius: 12
         }}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <ToolbarBtn onClick={flipBoard}>Flip Board</ToolbarBtn>
+            <ToolbarBtn onClick={flipBoard}>Flip View</ToolbarBtn>
             <ToolbarBtn onClick={fillStart}>Reset to Start</ToolbarBtn>
-            <ToolbarBtn onClick={() => setCoordinatesFlipped(c => !c)}>
-              Toggle Coords
+            <ToolbarBtn onClick={flipRanks}>
+              Flip Ranks {coordinatesFlipped ? '(Black view)' : '(White view)'}
             </ToolbarBtn>
             <ToolbarBtn onClick={clearBoard}>Clear Board</ToolbarBtn>
           </div>
@@ -502,6 +573,20 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
           </div>
         </div>
 
+        {/* Side Auto-Correction Warning */}
+        {sideWarning && (
+          <div style={{
+            marginBottom: 16,
+            padding: 12,
+            background: '#fef3c7',
+            border: '2px solid #f59e0b',
+            borderRadius: 10,
+            color: '#92400e'
+          }}>
+            <strong>⚠️ Auto-corrected:</strong> {sideWarning}
+          </div>
+        )}
+
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
           <div style={{
@@ -512,7 +597,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
             borderRadius: 10,
             color: '#991b1b'
           }}>
-            <strong>Position Issues:</strong>
+            <strong>⚠️ Position Issues:</strong>
             <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
               {validationErrors.map((err, i) => (
                 <li key={i}>{err}</li>
