@@ -204,7 +204,7 @@ function validateCompletePosition(pieces) {
   return { valid: errors.length === 0, errors };
 }
 
-export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage }) {
+export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage, onAnalyze }) {
   const startFen = initialFen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   const seed = parseFenToState(startFen);
 
@@ -502,6 +502,19 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
           <div style={{ display: 'flex', gap: 10 }}>
             <ToolbarBtn onClick={() => onCancel?.()}>
               Cancel
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => onAnalyze?.(fen)}
+              disabled={!fenStatus.valid || validationErrors.length > 0}
+              style={{
+                background: (fenStatus.valid && validationErrors.length === 0)
+                  ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                  : '#ccc',
+                color: '#fff',
+                fontWeight: 600
+              }}
+            >
+              Analyze Position
             </ToolbarBtn>
             <ToolbarBtn
               onClick={() => onDone?.(fen)}

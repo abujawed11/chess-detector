@@ -3,10 +3,13 @@ import './App.css'
 import ChessBoard from './ChessBoard'
 import CornerAdjuster from './CornerAdjuster'
 import BoardEditor from './BoardEditor'
+import Analysis from './Analysis'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export default function App(){
+  const [currentPage, setCurrentPage] = useState('scanner') // 'scanner' or 'analysis'
+  const [analysisFen, setAnalysisFen] = useState('') // FEN to analyze
   const [file, setFile] = useState(null)
   const [imgURL, setImgURL] = useState('')
   const [corners, setCorners] = useState(null)
@@ -116,6 +119,12 @@ export default function App(){
     setShowEditor(false)
   }
 
+  function handleEditorAnalyze(fenToAnalyze){
+    setAnalysisFen(fenToAnalyze)
+    setShowEditor(false)
+    setCurrentPage('analysis')
+  }
+
   // Show board editor if active
   if (showEditor) {
     return (
@@ -123,13 +132,85 @@ export default function App(){
         initialFen={fen}
         onDone={handleEditorDone}
         onCancel={handleEditorCancel}
+        onAnalyze={handleEditorAnalyze}
         overlayImage={overlayURL}
       />
     )
   }
 
+  // Show Analysis page
+  if (currentPage === 'analysis') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('scanner')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Scanner
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Position Analysis</span>
+        </nav>
+        <Analysis initialFen={analysisFen} />
+      </>
+    );
+  }
+
   return (
-    <div style={{padding:20, maxWidth: 1400, margin: '0 auto'}}>
+    <>
+      {/* Navigation */}
+      <nav style={{
+        padding: '12px 20px',
+        background: '#1f2937',
+        display: 'flex',
+        gap: 16,
+        marginBottom: 0
+      }}>
+        <h3 style={{ color: 'white', margin: 0 }}>Chess Detector</h3>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+          <button
+            onClick={() => setCurrentPage('scanner')}
+            style={{
+              padding: '8px 16px',
+              background: currentPage === 'scanner' ? '#8b5cf6' : 'transparent',
+              color: 'white',
+              border: '2px solid #8b5cf6',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            Scanner
+          </button>
+          <button
+            onClick={() => setCurrentPage('analysis')}
+            style={{
+              padding: '8px 16px',
+              background: currentPage === 'analysis' ? '#8b5cf6' : 'transparent',
+              color: 'white',
+              border: '2px solid #8b5cf6',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            Analysis
+          </button>
+        </div>
+      </nav>
+
+      <div style={{padding:20, maxWidth: 1400, margin: '0 auto'}}>
       <h2>Chess Image → FEN</h2>
       <p className="muted">Upload a chessboard image. Adjust the corners if needed, then generate FEN notation.</p>
 
@@ -231,6 +312,7 @@ export default function App(){
       <small className="muted">
         <strong>How to use:</strong> Upload an image → Adjust the 4 corner points to frame your board → Click "Generate FEN" → Copy the result!
       </small>
-    </div>
+      </div>
+    </>
   )
 }

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockfish Test</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    h1 {
+      color: #4ec9b0;
+    }
+    #status {
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .success {
+      background: #0e4429;
+      border: 2px solid #26a641;
+      color: #7ee787;
+    }
+    .error {
+      background: #490b0b;
+      border: 2px solid #f85149;
+      color: #ff7b72;
+    }
+    .info {
+      background: #1f3663;
+      border: 2px solid #388bfd;
+      color: #79c0ff;
+    }
+    #output {
+      background: #252526;
+      border: 1px solid #3e3e42;
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    button {
+      background: #0e639c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #1177bb;
+    }
+    button:disabled {
+      background: #3e3e42;
+      cursor: not-allowed;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #252526;
+      border: 1px solid #3e3e42;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 Stockfish Engine Test</h1>
+
+  <div id="status" class="info">
+    Initializing...
+  </div>
+
+  <div class="test-section">
+    <h3>Test Controls</h3>
+    <button id="testInit">1. Test Initialization</button>
+    <button id="testAnalysis">2. Test Analysis</button>
+    <button id="testMultiPV">3. Test MultiPV</button>
+    <button id="clearOutput">Clear Output</button>
+  </div>
+
+  <div class="test-section">
+    <h3>Engine Output</h3>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const outputEl = document.getElementById('output');
+    let worker = null;
+    let isReady = false;
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+      outputEl.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function setStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = type;
+    }
+
+    function send(command) {
+      if (!worker) {
+        log('Worker not initialized!', 'error');
+        return;
+      }
+      log(`>> ${command}`, 'info');
+      worker.postMessage(command);
+    }
+
+    // Test 1: Initialize Stockfish
+    document.getElementById('testInit').addEventListener('click', () => {
+      log('=== TEST 1: INITIALIZATION ===', 'info');
+      if (worker) {
+        log('Worker already exists, terminating...', 'info');
+        worker.terminate();
+      }
+
+      try {
+        setStatus('Loading Stockfish worker...', 'info');
+        log('Creating worker from /stockfish.js', 'info');
+
+        worker = new Worker('/stockfish.js');
+
+        worker.onmessage = (e) => {
+          const msg = String(e.data);
+          log(`<< ${msg}`, 'success');
+
+          if (msg.includes('uciok')) {
+            log('✅ UCI handshake successful!', 'success');
+            send('isready');
+          } else if (msg.includes('readyok')) {
+            isReady = true;
+            log('✅ Engine is ready!', 'success');
+            setStatus('✅ Stockfish initialized successfully!', 'success');
+          }
+        };
+
+        worker.onerror = (error) => {
+          log(`Worker error: ${error.message}`, 'error');
+          setStatus(`❌ Worker error: ${error.message}`, 'error');
+        };
+
+        log('Sending UCI command...', 'info');
+        send('uci');
+
+      } catch (error) {
+        log(`Failed to create worker: ${error.message}`, 'error');
+        setStatus(`❌ Failed to load: ${error.message}`, 'error');
+      }
+    });
+
+    // Test 2: Basic Analysis
+    document.getElementById('testAnalysis').addEventListener('click', () => {
+      if (!isReady) {
+        log('Engine not ready! Run Test 1 first.', 'error');
+        return;
+      }
+
+      log('=== TEST 2: BASIC ANALYSIS ===', 'info');
+      setStatus('Analyzing position...', 'info');
+
+      send('ucinewgame');
+      send('position startpos');
+      send('go depth 10');
+    });
+
+    // Test 3: MultiPV Analysis
+    document.getElementById('testMultiPV').addEventListener('click', () => {
+      if (!isReady) {
+        log('Engine not ready! Run Test 1 first.', 'error');
+        return;
+      }
+
+      log('=== TEST 3: MULTIPV ANALYSIS ===', 'info');
+      setStatus('Analyzing with MultiPV...', 'info');
+
+      send('setoption name MultiPV value 3');
+      send('position startpos');
+      send('go depth 10');
+    });
+
+    // Clear output
+    document.getElementById('clearOutput').addEventListener('click', () => {
+      outputEl.textContent = '';
+    });
+
+    // Auto-run Test 1 on load
+    log('Auto-running Test 1...', 'info');
+    setTimeout(() => {
+      document.getElementById('testInit').click();
+    }, 500);
+  </script>
+</body>
+</html>
