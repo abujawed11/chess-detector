@@ -1,0 +1,13 @@
+:root { --cell: 56px; }
+.board { display: grid; grid-template-columns: repeat(8, var(--cell)); width: calc(var(--cell) * 8); border: 2px solid #333; }
+.square { width: var(--cell); height: var(--cell); display:flex; align-items:center; justify-content:center; font-size: 28px; user-select:none; }
+.dark { background:#769656; } .light{ background:#eeeed2; }
+.pane { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.preview { max-width: 420px; border:1px dashed #aaa; padding:8px; }
+.overlay { max-width: 420px; border:1px solid #aaa; }
+.controls { display:flex; gap:12px; align-items:center; margin: 12px 0; }
+.fenbox { width: 100%; max-width: 640px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding:8px; }
+button { padding: 8px 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: #fff; cursor: pointer; }
+button:disabled { opacity: .6; cursor:not-allowed; }
+label.file { display:inline-block; padding:8px 12px; border:1px dashed #555; border-radius:8px; cursor:pointer; }
+small.muted { color:#666; }
