@@ -4,7 +4,8 @@
       "Bash(python organize_dataset.py:*)",
       "Bash(python organize_new_images.py:*)",
       "Bash(python organize_labels.py:*)",
-      "Bash(python organize_pieces.py:*)"
+      "Bash(python organize_pieces.py:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

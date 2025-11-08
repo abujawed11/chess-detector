@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import './App.css'
 import ChessBoard from './ChessBoard'
 import CornerAdjuster from './CornerAdjuster'
+import BoardEditor from './BoardEditor'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
@@ -15,6 +16,7 @@ export default function App(){
   const [flipRanks, setFlipRanks] = useState(false)
   const [busy, setBusy] = useState(false)
   const [stage, setStage] = useState('upload') // 'upload', 'adjust', 'result'
+  const [showEditor, setShowEditor] = useState(false)
   const inputRef = useRef(null)
 
   async function onPick(e){
@@ -101,6 +103,31 @@ export default function App(){
     navigator.clipboard.writeText(fen)
   }
 
+  function handleEditBoard(){
+    setShowEditor(true)
+  }
+
+  function handleEditorDone(newFen){
+    setFEN(newFen)
+    setShowEditor(false)
+  }
+
+  function handleEditorCancel(){
+    setShowEditor(false)
+  }
+
+  // Show board editor if active
+  if (showEditor) {
+    return (
+      <BoardEditor
+        initialFen={fen}
+        onDone={handleEditorDone}
+        onCancel={handleEditorCancel}
+        overlayImage={overlayURL}
+      />
+    )
+  }
+
   return (
     <div style={{padding:20, maxWidth: 1400, margin: '0 auto'}}>
       <h2>Chess Image → FEN</h2>
@@ -180,6 +207,7 @@ export default function App(){
               <div style={{display:'flex', gap:8, alignItems:'center', marginTop: 8}}>
                 <input className="fenbox" value={fen} readOnly placeholder="FEN will appear here" />
                 <button onClick={copyFen} disabled={!fen}>Copy</button>
+                <button onClick={handleEditBoard} disabled={!fen}>Edit Board</button>
               </div>
               <div style={{marginTop:16}}>
                 <strong>Board Preview</strong>
