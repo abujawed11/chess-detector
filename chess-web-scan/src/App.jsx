@@ -1,38 +1,9 @@
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import './App.css'
-import { fenToArray, PIECE_TO_UNICODE } from './lib/fenBoard'
+import ChessBoard from './ChessBoard'
 import CornerAdjuster from './CornerAdjuster'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
-
-function Board({ fen }) {
-  const arr = useMemo(() => fen ? fenToArray(fen) : Array(64).fill(''), [fen])
-  const cells = []
-  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-  const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
-  
-  for (let r = 0; r < 8; r++) {
-    for (let f = 0; f < 8; f++) {
-      const idx = r*8 + f
-      const dark = (r + f) % 2 === 1
-      const ch = arr[idx]
-      const coord = files[f] + ranks[r]
-      cells.push(
-        <div className={`square ${dark? 'dark':'light'}`} key={idx} title={coord}>
-          {PIECE_TO_UNICODE[ch] || ''}
-        </div>
-      )
-    }
-  }
-  return (
-    <div style={{position: 'relative', display: 'inline-block'}}>
-      <div className="board">{cells}</div>
-      <div style={{display: 'flex', justifyContent: 'space-around', marginTop: 4, fontSize: 12, color: '#888', paddingLeft: 3}}>
-        {files.map(f => <span key={f} style={{width: 'var(--cell)', textAlign: 'center'}}>{f}</span>)}
-      </div>
-    </div>
-  )
-}
 
 export default function App(){
   const [file, setFile] = useState(null)
@@ -212,7 +183,7 @@ export default function App(){
               </div>
               <div style={{marginTop:16}}>
                 <strong>Board Preview</strong>
-                <Board fen={fen} />
+                <ChessBoard fen={fen} />
                 <small className="muted" style={{display: 'block', marginTop: 8}}>
                   If pieces appear inverted, toggle "White pieces at top" and click Regenerate
                 </small>
