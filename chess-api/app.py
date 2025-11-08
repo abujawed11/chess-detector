@@ -39,13 +39,38 @@ def health():
     return {"ok": True}
 
 @app.post("/infer")
-async def infer(file: UploadFile = File(...), flip_ranks: bool = Form(False)):
+async def infer(
+    file: UploadFile = File(...), 
+    flip_ranks: bool = Form(False),
+    corners: str = Form(None)  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+):
     try:
+        import json
         content = await file.read()
         image = Image.open(BytesIO(content))
-        result, overlay_png = DETECTOR.run(image, flip_ranks=flip_ranks)
-        b64 = base64.b64encode(overlay_png).decode("ascii")
-        result["overlay_png_base64"] = f"data:image/png;base64,{b64}"
+        
+        # Parse manual corners if provided
+        manual_corners = None
+        if corners:
+            try:
+                manual_corners = json.loads(corners)
+            except:
+                pass
+        
+        result, overlay_png, debug_png = DETECTOR.run(
+            image, 
+            flip_ranks=flip_ranks,
+            manual_corners=manual_corners
+        )
+        
+        # Encode overlay image (warped board with detections)
+        overlay_b64 = base64.b64encode(overlay_png).decode("ascii")
+        result["overlay_png_base64"] = f"data:image/png;base64,{overlay_b64}"
+        
+        # Encode debug image (original image with detected corners)
+        debug_b64 = base64.b64encode(debug_png).decode("ascii")
+        result["debug_png_base64"] = f"data:image/png;base64,{debug_b64}"
+        
         return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
