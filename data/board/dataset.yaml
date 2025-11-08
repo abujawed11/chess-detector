@@ -11,6 +11,6 @@ names:
 roboflow:
   workspace: chess-board-detector
   project: chess-board-detector2-34oip
-  version: 1
+  version: 2
   license: CC BY 4.0
-  url: https://universe.roboflow.com/chess-board-detector/chess-board-detector2-34oip/dataset/1
+  url: https://universe.roboflow.com/chess-board-detector/chess-board-detector2-34oip/dataset/2
