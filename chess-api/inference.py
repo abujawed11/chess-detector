@@ -166,12 +166,17 @@ class Detector:
                 board_conf[rank_idx][file_idx] = det["conf"]
         
         # Convert board to FEN
+        # FEN starts from rank 8 (top) to rank 1 (bottom)
+        # board[0] = top of image, board[7] = bottom of image
+        # If flip_ranks=True, white is at top (board reversed)
         fen_rows = []
         for rank_idx in range(8):
             if flip_ranks:
-                rank = board[rank_idx]
-            else:
+                # White at top: reverse the board order
                 rank = board[7 - rank_idx]
+            else:
+                # Normal: white at bottom (standard orientation)
+                rank = board[rank_idx]
             
             fen_row = ""
             empty_count = 0
@@ -204,6 +209,20 @@ class Detector:
             pos = int(i * square_size)
             cv2.line(overlay, (pos, 0), (pos, WARP_SIZE), grid_color, 1)
             cv2.line(overlay, (0, pos), (WARP_SIZE, pos), grid_color, 1)
+        
+        # Draw file labels (a-h) at the bottom
+        files = 'abcdefgh'
+        for i, f in enumerate(files):
+            x = int((i + 0.5) * square_size)
+            cv2.putText(overlay, f, (x - 15, WARP_SIZE - 20),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 0), 3)
+        
+        # Draw rank labels (8-1) on the left
+        for i in range(8):
+            rank = 8 - i
+            y = int((i + 0.5) * square_size)
+            cv2.putText(overlay, str(rank), (20, y + 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 0), 3)
         
         # Draw detections
         for det in detections:

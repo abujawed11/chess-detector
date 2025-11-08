@@ -143,9 +143,9 @@ export default function App(){
         
         {stage !== 'upload' && (
           <>
-            <label style={{display:'inline-flex', alignItems:'center', gap:8}}>
+            <label style={{display:'inline-flex', alignItems:'center', gap:8}} title="Check this if white pieces are at the TOP of your image">
               <input type="checkbox" checked={flipRanks} onChange={e=>setFlipRanks(e.target.checked)} /> 
-              Flip ranks (if board is upside down)
+              White pieces at top (flip board)
             </label>
             {stage === 'result' && (
               <button onClick={startOver} style={{marginLeft: 'auto'}}>Start Over</button>
@@ -177,6 +177,17 @@ export default function App(){
       {stage === 'result' && (
         <div>
           <h3>Results</h3>
+          <div style={{marginBottom: 12, padding: 10, background: '#2a2a2a', borderRadius: 4, border: '1px solid #444'}}>
+            <small style={{color: '#aaa'}}>
+              Board orientation: <strong>{flipRanks ? 'White at top (flipped)' : 'White at bottom (normal)'}</strong>
+            </small>
+            <button 
+              onClick={() => onGenerateFEN(corners)} 
+              style={{marginLeft: 12, padding: '4px 8px', fontSize: 12}}
+            >
+              🔄 Regenerate
+            </button>
+          </div>
           <div className="pane">
             <div>
               <div className="overlay">
@@ -188,6 +199,9 @@ export default function App(){
                     <small className="muted">No overlay available</small>
                   )}
                 </div>
+                <small className="muted" style={{display: 'block', marginTop: 8}}>
+                  Yellow labels show rank (1-8) and file (a-h) coordinates
+                </small>
               </div>
             </div>
             <div>
@@ -199,6 +213,9 @@ export default function App(){
               <div style={{marginTop:16}}>
                 <strong>Board Preview</strong>
                 <Board fen={fen} />
+                <small className="muted" style={{display: 'block', marginTop: 8}}>
+                  If pieces appear inverted, toggle "White pieces at top" and click Regenerate
+                </small>
               </div>
             </div>
           </div>
