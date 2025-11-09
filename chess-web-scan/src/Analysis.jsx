@@ -834,9 +834,23 @@ import EngineLines from './components/EngineLines';
 import {
   evalForRoot,
   normalizeLines,
-  classifyMove,
-  isOpeningPhase
+  analyzeMoveClassification
 } from './utils/moveClassification';
+
+// Helper function to get classification color
+function getClassificationColor(classification) {
+  const colors = {
+    brilliant: '#1baca6',
+    book: '#a88865',
+    best: '#9bc02a',
+    excellent: '#96bc4b',
+    good: '#96af8b',
+    inaccuracy: '#f0c15c',
+    mistake: '#e58f2a',
+    blunder: '#fa412d'
+  };
+  return colors[classification] || '#9bc02a';
+}
 
 export default function Analysis({ initialFen, onEditPosition }) {
   const startFen = initialFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -930,34 +944,14 @@ export default function Analysis({ initialFen, onEditPosition }) {
       if (previousAnalysis?.lines?.length) {
         try {
           const movePlayed = move.from + move.to + (move.promotion || '');
-          const tempChess = new Chess(previousFen);
-          const rootTurn = tempChess.turn();
-          const lines = normalizeLines(previousAnalysis.lines, rootTurn);
-          const best = lines[0]?.pv?.[0];
 
-          const isBook = isOpeningPhase(previousFen);
-          const pv2Gap = lines.length > 1 ? (lines[0].scoreForRoot - lines[1].scoreForRoot) : 0;
-          const forced = pv2Gap >= 200;
-
-          const ourRoot = await analyze(previousFen, { depth: analysisDepth, multiPV: 1, searchMoves: [movePlayed] });
-          const bestRoot = await analyze(previousFen, { depth: analysisDepth, multiPV: 1, searchMoves: [best] });
-
-          const ourRootScore = evalForRoot(rootTurn, rootTurn, ourRoot.evaluation);
-          const bestRootScore = evalForRoot(rootTurn, rootTurn, bestRoot.evaluation);
-          const cpLoss = Math.max(0, bestRootScore - ourRootScore);
-
-          const eps = 10;
-          const inTop3 = lines.slice(0, 3).some(l => l.pv[0]?.toLowerCase() === movePlayed.toLowerCase());
-          const ourLine = lines.find(l => l.pv[0]?.toLowerCase() === movePlayed.toLowerCase());
-          const withinEps = ourLine ? (lines[0].scoreForRoot - ourLine.scoreForRoot) <= eps : false;
-          const missedMate = (lines[0]?.evaluation?.type === 'mate') && (ourRoot.evaluation?.type !== 'mate');
-
-          const pieceCount = (previousFen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
-          const isBrilliant = forced && pv2Gap >= 500 && cpLoss === 0 && !isBook && pieceCount >= 20 && pieceCount <= 30;
-
-          classification = classifyMove(cpLoss, {
-            inTop3, withinEps, forced, missedMate, isBook: isBook && cpLoss <= 10, isBrilliant
-          });
+          // Use the comprehensive classification system with brilliant detection
+          classification = await analyzeMoveClassification(
+            { analyze }, // Pass stockfish service with analyze method
+            previousFen,
+            movePlayed,
+            { depth: analysisDepth, epsilon: 10 }
+          );
         } catch (e) {
           console.error('Classification error:', e);
         }
@@ -968,7 +962,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
         evaluation: result.evaluation,
         classification: classification.classification,
         classificationLabel: classification.label,
-        cpLoss: classification.cpLoss
+        cpLoss: classification.cpLoss,
+        isBrilliantV2: classification.isBrilliantV2,
+        brilliantAnalysis: classification.brilliantAnalysis
       };
       setMoves(prev => [...prev, newMove]);
       setCurrentMoveIndex(prev => prev + 1);
@@ -985,13 +981,53 @@ export default function Analysis({ initialFen, onEditPosition }) {
   }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
 
   const navigateToMove = useCallback((moveIndex) => {
-    game.reset();
-    game.load(startFen);
-    const movesToReplay = moves.slice(0, moveIndex + 1);
-    movesToReplay.forEach(m => game.move({ from: m.from, to: m.to, promotion: m.promotion }));
-    setCurrentFen(game.fen());
-    setCurrentMoveIndex(moveIndex);
-    setCurrentEval(moveIndex >= 0 ? moves[moveIndex].evaluation : null);
+    try {
+      // Create a fresh Chess instance to avoid race conditions
+      const tempGame = new Chess(startFen);
+      const movesToReplay = moves.slice(0, moveIndex + 1);
+
+      // Replay all moves up to the target index
+      for (let i = 0; i < movesToReplay.length; i++) {
+        const m = movesToReplay[i];
+        const result = tempGame.move({ from: m.from, to: m.to, promotion: m.promotion });
+
+        if (!result) {
+          console.error('Failed to replay move:', m, 'at index', i);
+          console.error('Current FEN:', tempGame.fen());
+          // Stop replaying if we hit an invalid move
+          break;
+        }
+      }
+
+      // Update the shared game object and state
+      game.load(tempGame.fen());
+      setCurrentFen(tempGame.fen());
+      setCurrentMoveIndex(moveIndex);
+      setCurrentEval(moveIndex >= 0 ? moves[moveIndex].evaluation : null);
+
+      // Update classification display to match the current move
+      if (moveIndex >= 0 && moves[moveIndex]) {
+        const currentMove = moves[moveIndex];
+        setLastMoveClassification({
+          classification: currentMove.classification,
+          label: currentMove.classificationLabel,
+          cpLoss: currentMove.cpLoss,
+          color: getClassificationColor(currentMove.classification),
+          isBrilliantV2: currentMove.isBrilliantV2,
+          brilliantAnalysis: currentMove.brilliantAnalysis
+        });
+      } else {
+        setLastMoveClassification(null);
+      }
+    } catch (error) {
+      console.error('Error navigating to move:', error);
+      // Fallback: reset to start position
+      game.reset();
+      game.load(startFen);
+      setCurrentFen(startFen);
+      setCurrentMoveIndex(-1);
+      setLastMoveClassification(null);
+    }
   }, [game, moves, startFen]);
 
   const resetToStart = useCallback(() => {
@@ -1210,6 +1246,77 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 </div>
                 <div className="text-sm text-slate-600">
                   Centipawn loss: {lastMoveClassification.cpLoss.toFixed(0)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Brilliant Move Details - show when move is brilliant V2 */}
+          {lastMoveClassification?.isBrilliantV2 && lastMoveClassification?.brilliantAnalysis && (
+            <div className="rounded-xl border-2 border-cyan-400 bg-gradient-to-br from-cyan-50 to-teal-50 p-4 shadow-lg">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-2xl">💎</span>
+                <div className="text-lg font-extrabold text-cyan-600">
+                  Brilliant Move Detected
+                </div>
+                <div className="ml-auto rounded-full bg-cyan-600 px-3 py-1 text-xs font-bold text-white">
+                  {(lastMoveClassification.brilliantAnalysis.confidence * 100).toFixed(0)}% confidence
+                </div>
+              </div>
+
+              {/* Gates Status */}
+              <div className="mb-2 space-y-1">
+                <div className="text-xs font-semibold text-slate-600">Gates Passed:</div>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(lastMoveClassification.brilliantAnalysis.gates).map(([gate, passed]) => (
+                    <div
+                      key={gate}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                        passed
+                          ? 'bg-green-100 text-green-700 border border-green-300'
+                          : 'bg-red-100 text-red-700 border border-red-300'
+                      }`}
+                    >
+                      {passed ? '✓' : '✗'} {gate}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reasons */}
+              <div className="mt-2 space-y-1">
+                <div className="text-xs font-semibold text-slate-600">Analysis:</div>
+                <div className="max-h-32 overflow-y-auto rounded bg-white p-2 text-xs font-mono text-slate-700">
+                  {lastMoveClassification.brilliantAnalysis.reasons.map((reason, idx) => (
+                    <div
+                      key={idx}
+                      className={`${
+                        reason.includes('✓') || reason.includes('CONFIRMED')
+                          ? 'text-green-700 font-bold'
+                          : reason.includes('FAILED')
+                          ? 'text-red-700'
+                          : reason.includes('WEAK')
+                          ? 'text-orange-600'
+                          : 'text-slate-600'
+                      }`}
+                    >
+                      {reason}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Additional stats */}
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded bg-white p-2">
+                  <div className="font-semibold text-slate-600">Game Phase</div>
+                  <div className="font-bold text-slate-800">{lastMoveClassification.brilliantAnalysis.gamePhase}</div>
+                </div>
+                <div className="rounded bg-white p-2">
+                  <div className="font-semibold text-slate-600">Material Lost</div>
+                  <div className="font-bold text-slate-800">
+                    {lastMoveClassification.brilliantAnalysis.sacrificeResult?.materialLost || 0}cp
+                  </div>
                 </div>
               </div>
             </div>

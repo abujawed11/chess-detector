@@ -3,6 +3,8 @@
  * Chess.com-style move classification with accurate evaluation
  */
 
+import { analyzeBrilliantMove, shouldCheckBrilliant } from './brilliantDetection.js';
+
 /**
  * Normalize any engine evaluation to the ROOT side-to-move perspective
  * @param {string} rootTurn - Root position turn ('w' or 'b')
@@ -223,15 +225,35 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   // Count pieces for brilliant detection and game phase
   const pieceCount = (fen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
 
-  // Brilliant move detection: ONLY move in a critical position (extremely forced)
-  // Requires: very large gap to 2nd move (500+), best move, and not opening/endgame
-  const isBrilliant =
+  // Enhanced Brilliant Move Detection (V2)
+  let isBrilliantV2 = false;
+  let brilliantAnalysis = null;
+
+  // Quick pre-check to avoid expensive brilliant analysis
+  if (shouldCheckBrilliant(fen, move, cpLoss, forced)) {
+    try {
+      brilliantAnalysis = await analyzeBrilliantMove(stockfish, fen, move, {
+        depth,
+        useAdaptive: true
+      });
+      isBrilliantV2 = brilliantAnalysis.isBrilliantV2;
+    } catch (error) {
+      console.error('Brilliant analysis failed:', error);
+      isBrilliantV2 = false;
+    }
+  }
+
+  // Legacy brilliant detection (fallback for simple cases)
+  const isBrilliantLegacy =
     forced &&
     pv2Gap >= 500 &&
     cpLoss === 0 &&
     !isBook &&
     pieceCount >= 20 &&
     pieceCount <= 30;
+
+  // Use V2 if available, otherwise fall back to legacy
+  const isBrilliant = isBrilliantV2 || isBrilliantLegacy;
 
   const classification = classifyMove(cpLoss, {
     inTop3,
@@ -251,6 +273,8 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     missedMate,
     isBook: isBook && cpLoss <= 15,
     isBrilliant,
+    isBrilliantV2,
+    brilliantAnalysis, // Detailed brilliant move analysis (gates, reasons, confidence)
     engineEval: bestRootScore,
     moveEval: ourRootScore
   };
