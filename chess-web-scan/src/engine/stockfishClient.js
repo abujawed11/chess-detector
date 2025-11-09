@@ -14,8 +14,15 @@ export class StockfishClient {
       this.worker = new Worker(path);
       this._setupWorkerHandlers();
       this._startInitTimeout();
-      // Send UCI command after handlers are set up to avoid race condition
-      this.worker.postMessage('uci');
+
+      // Send UCI command after a small delay to ensure worker is fully loaded
+      // This prevents race conditions where the worker isn't ready to receive messages
+      setTimeout(() => {
+        if (this.worker && !this._crashed) {
+          console.log('📤 Sending UCI handshake to engine...');
+          this.worker.postMessage('uci');
+        }
+      }, 100);
     } catch (error) {
       console.error('Failed to initialize Stockfish worker:', error);
       this._handleError('Failed to load Stockfish engine. Please check your internet connection and refresh the page.', error);

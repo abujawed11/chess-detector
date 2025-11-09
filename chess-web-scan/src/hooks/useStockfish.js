@@ -234,6 +234,26 @@ export function useStockfish() {
     } catch {}
   }, []);
 
+  /**
+   * Get thread information
+   */
+  const getThreadInfo = useCallback(() => {
+    if (!stockfishRef.current) {
+      return { current: 1, max: 1, supportsMultiThreading: false };
+    }
+    return stockfishRef.current.getThreadInfo?.() || { current: 1, max: 1, supportsMultiThreading: false };
+  }, []);
+
+  /**
+   * Change thread count
+   */
+  const setThreads = useCallback(async (count) => {
+    if (!stockfishRef.current) {
+      return false;
+    }
+    return await stockfishRef.current.setThreads?.(count);
+  }, []);
+
   return {
     initialized,
     analyzing,
@@ -248,6 +268,10 @@ export function useStockfish() {
     getTopMoves,
     getEvaluation,
     analyzeSpecificMove, // <-- use this in your TestClassification for "our move" and "best move" re-search
+
+    // threading
+    getThreadInfo,
+    setThreads,
   };
 }
 

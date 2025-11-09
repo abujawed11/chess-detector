@@ -23,7 +23,7 @@ export default function Analysis({ initialFen }) {
   const [flipped, setFlipped] = useState(false);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
 
-  const { initialized, analyzing, analyze, getTopMoves, error } = useStockfish();
+  const { initialized, analyzing, analyze, getTopMoves, error, getThreadInfo, setThreads } = useStockfish();
 
   const [currentEval, setCurrentEval] = useState(null);
   const [bestMove, setBestMove] = useState(null);
@@ -35,6 +35,15 @@ export default function Analysis({ initialFen }) {
   const [engineLines, setEngineLines] = useState([]); // Top engine lines
   const [isProcessingMove, setIsProcessingMove] = useState(false); // Prevent auto-analyze during move processing
   const [hoverMove, setHoverMove] = useState(null); // Move to display when hovering over engine lines
+  const [threadInfo, setThreadInfo] = useState({ current: 1, max: 1, supportsMultiThreading: false });
+
+  // Get thread info when engine is initialized
+  useEffect(() => {
+    if (initialized && getThreadInfo) {
+      const info = getThreadInfo();
+      setThreadInfo(info);
+    }
+  }, [initialized, getThreadInfo]);
 
   // Update game when initialFen changes
   useEffect(() => {
@@ -269,6 +278,17 @@ export default function Analysis({ initialFen }) {
     await analyzeCurrentPosition(true);
   }, [analyzeCurrentPosition]);
 
+  // Handle thread count change
+  const handleThreadChange = useCallback(async (newThreads) => {
+    if (setThreads) {
+      const success = await setThreads(newThreads);
+      if (success && getThreadInfo) {
+        const info = getThreadInfo();
+        setThreadInfo(info);
+      }
+    }
+  }, [setThreads, getThreadInfo]);
+
   return (
     <div style={{ padding: 20, maxWidth: 1600, margin: '0 auto' }}>
       {/* Header */}
@@ -291,6 +311,12 @@ export default function Analysis({ initialFen }) {
           }}>
             <strong>Engine:</strong> {initialized ? '✓ Ready' : '⏳ Initializing...'}
             {analyzing && ' (Analyzing...)'}
+            {initialized && threadInfo && (
+              <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.8 }}>
+                | {threadInfo.current} thread{threadInfo.current > 1 ? 's' : ''}
+                {!threadInfo.supportsMultiThreading && ' (single-threaded mode)'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -362,6 +388,37 @@ export default function Analysis({ initialFen }) {
             <option value={15}>Depth 15 (Normal)</option>
             <option value={20}>Depth 20 (Deep)</option>
           </select>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            background: threadInfo.supportsMultiThreading ? '#dbeafe' : '#f3f4f6',
+            borderRadius: 6,
+            border: `2px solid ${threadInfo.supportsMultiThreading ? '#3b82f6' : '#e5e7eb'}`
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>🧵 Threads:</span>
+            <select
+              value={threadInfo.current}
+              onChange={(e) => handleThreadChange(Number(e.target.value))}
+              disabled={!initialized || !threadInfo.supportsMultiThreading}
+              style={{
+                padding: '4px 8px',
+                borderRadius: 4,
+                border: '1px solid #e5e7eb',
+                fontWeight: 600,
+                cursor: !initialized || !threadInfo.supportsMultiThreading ? 'not-allowed' : 'pointer',
+                opacity: !initialized || !threadInfo.supportsMultiThreading ? 0.5 : 1
+              }}
+              title={!threadInfo.supportsMultiThreading ? 'Multi-threading not supported (requires COOP/COEP headers and SharedArrayBuffer)' : `Using ${threadInfo.current} of ${threadInfo.max} available threads`}
+            >
+              {Array.from({ length: threadInfo.max }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>/ {threadInfo.max}</span>
+          </div>
 
           <button
             onClick={() => setFlipped(f => !f)}

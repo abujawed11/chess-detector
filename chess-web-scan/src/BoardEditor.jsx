@@ -119,7 +119,22 @@ function validateAndFixSide(fen) {
 }
 
 // Validate position rules - for placement (lenient, allows building)
-function validatePlacement(pieces, newSquare, newPiece) {
+// isMoving = true means we're moving an existing piece, so we're more lenient
+function validatePlacement(pieces, newSquare, newPiece, isMoving = false) {
+  // If moving an existing piece, allow it without validation
+  // This lets users FIX invalid positions by moving/removing pieces
+  if (isMoving) {
+    // Only check if trying to place a pawn on rank 1 or 8
+    if (newPiece && newSquare) {
+      const rank = parseInt(newSquare[1]);
+      if ((newPiece === 'P' || newPiece === 'p') && (rank === 1 || rank === 8)) {
+        return { valid: false, errors: [`Pawns cannot be placed on rank ${rank}`] };
+      }
+    }
+    // Otherwise, allow any move - user is fixing the position
+    return { valid: true, errors: [] };
+  }
+
   // Create a temporary pieces object with the new piece
   const tempPieces = { ...pieces };
   if (newSquare && newPiece) {
@@ -145,6 +160,7 @@ function validatePlacement(pieces, newSquare, newPiece) {
     }
   }
 
+  // When placing NEW pieces (from palette), enforce strict limits
   // Validate piece counts (blocking rules during placement)
   if (pieceCounts['K'] > 1) errors.push('Cannot have more than 1 white king');
   if (pieceCounts['k'] > 1) errors.push('Cannot have more than 1 black king');
@@ -284,8 +300,12 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
 
 
   function placePiece(square, piece){
-    // Validate before placing (lenient - allows building position piece by piece)
-    const validation = validatePlacement(pieces, square, piece);
+    // Check if we're replacing an existing piece
+    const isReplacing = pieces[square] !== undefined;
+
+    // If replacing, treat it like a move (very lenient)
+    // If placing on empty square, validate strictly
+    const validation = validatePlacement(pieces, square, piece, isReplacing);
 
     if (!validation.valid) {
       // Show error briefly
@@ -309,8 +329,9 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     const tempPieces = {...pieces};
     delete tempPieces[from];
 
-    // Validate the new position (lenient - allows building)
-    const validation = validatePlacement(tempPieces, to, piece);
+    // Validate the new position (lenient - allows moving to fix invalid positions)
+    // Pass isMoving=true to allow moving pieces even if position is already invalid
+    const validation = validatePlacement(tempPieces, to, piece, true);
 
     if (!validation.valid) {
       alert(validation.errors.join('\n'));
