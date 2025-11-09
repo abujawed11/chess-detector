@@ -15,6 +15,15 @@ export default function MoveHistory({ moves, currentMoveIndex, onMoveClick }) {
     });
   }
 
+  // Calculate statistics
+  const stats = moves.reduce((acc, move) => {
+    const classification = move.classification || 'best';
+    acc[classification] = (acc[classification] || 0) + 1;
+    return acc;
+  }, {});
+
+  const hasSpecialMoves = stats.brilliant || stats.book || stats.blunder || stats.mistake;
+
   return (
     <div style={{
       background: '#f9fafb',
@@ -24,7 +33,29 @@ export default function MoveHistory({ moves, currentMoveIndex, onMoveClick }) {
       maxHeight: 400,
       overflowY: 'auto'
     }}>
-      <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Move History</h3>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12
+      }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Move History</h3>
+
+        {/* Mini legend for special moves */}
+        {hasSpecialMoves && (
+          <div style={{
+            fontSize: 10,
+            color: '#6b7280',
+            display: 'flex',
+            gap: 6
+          }}>
+            {stats.brilliant > 0 && <span title="Brilliant moves">‼ {stats.brilliant}</span>}
+            {stats.book > 0 && <span title="Book moves">📖 {stats.book}</span>}
+            {stats.mistake > 0 && <span title="Mistakes">? {stats.mistake}</span>}
+            {stats.blunder > 0 && <span title="Blunders">?? {stats.blunder}</span>}
+          </div>
+        )}
+      </div>
 
       {moves.length === 0 && (
         <div style={{
@@ -85,35 +116,104 @@ export default function MoveHistory({ moves, currentMoveIndex, onMoveClick }) {
 
 function MoveButton({ move, isActive, onClick }) {
   const classification = move.classification || 'best';
+  const classificationLabel = move.classificationLabel || 'Best';
+  const cpLoss = move.cpLoss ?? 0;
   const symbol = getClassificationSymbol(classification);
+  const color = getClassificationColor(classification);
+
+  // Determine if this is a special move worth highlighting
+  const isSpecial = ['brilliant', 'book', 'blunder', 'mistake'].includes(classification);
+
+  // Build tooltip text
+  const tooltipText = `${classificationLabel} (${cpLoss.toFixed(0)} cp loss)`;
 
   return (
     <button
       onClick={onClick}
+      title={tooltipText}
       style={{
         padding: '6px 8px',
-        border: isActive ? '2px solid #8b5cf6' : '2px solid transparent',
+        border: isActive ? '2px solid #8b5cf6' : isSpecial ? `2px solid ${color}` : '2px solid transparent',
         borderRadius: 6,
-        background: isActive ? '#ede9fe' : '#f9fafb',
+        background: isActive
+          ? '#ede9fe'
+          : isSpecial
+          ? `${color}10`  // Very light tint of classification color
+          : '#f9fafb',
         cursor: 'pointer',
         fontSize: 14,
-        fontWeight: isActive ? 600 : 400,
+        fontWeight: isActive ? 600 : isSpecial ? 500 : 400,
         textAlign: 'left',
         transition: 'all 0.2s',
-        color: getClassificationColor(classification)
+        color: color,
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 4
       }}
       onMouseEnter={(e) => {
         if (!isActive) {
-          e.currentTarget.style.background = '#f3f4f6';
+          e.currentTarget.style.background = isSpecial ? `${color}20` : '#f3f4f6';
         }
       }}
       onMouseLeave={(e) => {
         if (!isActive) {
-          e.currentTarget.style.background = '#f9fafb';
+          e.currentTarget.style.background = isSpecial ? `${color}10` : '#f9fafb';
         }
       }}
     >
-      {move.san} {symbol}
+      <span style={{ flex: 1 }}>
+        {move.san}
+      </span>
+
+      {/* Symbol and CP loss */}
+      <span style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        fontSize: 11,
+        fontWeight: 700
+      }}>
+        {symbol && <span>{symbol}</span>}
+
+        {/* Show CP loss for non-best moves */}
+        {cpLoss > 10 && (
+          <span style={{
+            fontSize: 9,
+            opacity: 0.7,
+            fontWeight: 600
+          }}>
+            ({cpLoss.toFixed(0)})
+          </span>
+        )}
+
+        {/* Special badge for book/brilliant */}
+        {classification === 'book' && (
+          <span style={{
+            fontSize: 9,
+            padding: '1px 3px',
+            background: color,
+            color: '#fff',
+            borderRadius: 3,
+            fontWeight: 700
+          }}>
+            📖
+          </span>
+        )}
+        {classification === 'brilliant' && (
+          <span style={{
+            fontSize: 9,
+            padding: '1px 3px',
+            background: color,
+            color: '#fff',
+            borderRadius: 3,
+            fontWeight: 700
+          }}>
+            ‼
+          </span>
+        )}
+      </span>
     </button>
   );
 }

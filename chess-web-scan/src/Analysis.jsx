@@ -4,6 +4,7 @@ import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
+import EngineLines from './components/EngineLines';
 import {
   evalForRoot,
   normalizeLines,
@@ -31,6 +32,8 @@ export default function Analysis({ initialFen }) {
   const [lastMoveClassification, setLastMoveClassification] = useState(null);
   const [analysisDepth, setAnalysisDepth] = useState(15);
   const [storedAnalysis, setStoredAnalysis] = useState(null); // Store analysis before move
+  const [engineLines, setEngineLines] = useState([]); // Top engine lines
+  const [isProcessingMove, setIsProcessingMove] = useState(false); // Prevent auto-analyze during move processing
 
   // Update game when initialFen changes
   useEffect(() => {
@@ -55,6 +58,7 @@ export default function Analysis({ initialFen }) {
 
       setCurrentEval(result.evaluation);
       setStoredAnalysis(result); // Store full analysis for move classification
+      setEngineLines(result.lines || []); // Store multi-line analysis
 
       // Only set best move if hints are enabled or forced
       if (showBestMove || forceShowHint || hintRequested) {
@@ -67,20 +71,23 @@ export default function Analysis({ initialFen }) {
     }
   }, [currentFen, initialized, analyze, analysisDepth, showBestMove, hintRequested]);
 
-  // Auto-analyze when position changes
+  // Auto-analyze when position changes (but not during move processing)
   useEffect(() => {
-    if (autoAnalyze && initialized) {
+    if (autoAnalyze && initialized && !isProcessingMove) {
       const timer = setTimeout(() => {
         analyzeCurrentPosition();
       }, 300);
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFen, autoAnalyze, initialized]);
+  }, [currentFen, autoAnalyze, initialized, isProcessingMove]);
 
   // Handle move made on board
   const handleMove = useCallback(async (move, newFen) => {
     if (!initialized) return;
+
+    // Prevent auto-analyze from running during move processing
+    setIsProcessingMove(true);
 
     // Store FEN and analysis from BEFORE the move
     const previousFen = currentFen;
@@ -104,6 +111,13 @@ export default function Analysis({ initialFen }) {
       // Store this analysis for the next move
       setStoredAnalysis(result);
       setCurrentEval(result.evaluation);
+      setEngineLines(result.lines || []); // Store multi-line analysis
+
+      console.log('🔍 Analysis after move:', {
+        fen: newFen,
+        linesCount: result.lines?.length,
+        lines: result.lines
+      });
 
       // Classify the move if we have previous analysis
       let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#9bc02a' };
@@ -211,6 +225,9 @@ export default function Analysis({ initialFen }) {
 
     } catch (err) {
       console.error('Analysis error:', err);
+    } finally {
+      // Re-enable auto-analyze after move processing is complete
+      setIsProcessingMove(false);
     }
   }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
 
@@ -384,7 +401,7 @@ export default function Analysis({ initialFen }) {
         gap: 20
       }}>
         {/* Evaluation Bar */}
-        <EvaluationBar score={currentEval} height={560} />
+        <EvaluationBar score={currentEval} fen={currentFen} height={560} />
 
         {/* Chess Board */}
         <InteractiveBoard
@@ -497,6 +514,18 @@ export default function Analysis({ initialFen }) {
                 }
               </div>
             </div>
+          )}
+
+          {/* Engine Lines - Multi-line analysis like Chess.com */}
+          {engineLines.length > 0 && (
+            <EngineLines
+              lines={engineLines}
+              depth={analysisDepth}
+              turn={currentFen.split(' ')[1]}
+              onLineClick={(line) => {
+                console.log('Selected line:', line);
+              }}
+            />
           )}
 
           {/* Move History */}
