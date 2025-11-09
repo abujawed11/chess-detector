@@ -133,7 +133,7 @@
         setStatus('Loading Stockfish worker...', 'info');
         log('Creating worker from /stockfish.js', 'info');
 
-        worker = new Worker('/stockfish.js');
+        worker = new Worker('/stockfish-17.1-8e4d048.js');
 
         worker.onmessage = (e) => {
           const msg = String(e.data);

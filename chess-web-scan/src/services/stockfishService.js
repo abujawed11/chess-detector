@@ -23,7 +23,7 @@ class StockfishService {
 
     try {
       // Create StockfishClient - loads worker directly (ASM.js version for compatibility)
-      this.engine = new StockfishClient('/stockfish.js');
+      this.engine = new StockfishClient('/stockfish-17.1-8e4d048.js');
 
       // Wait for engine to be ready
       await this.engine.waitReady();
@@ -61,6 +61,8 @@ class StockfishService {
    * @param {number} options.depth - Search depth (default: 15)
    * @param {number} options.time - Time limit in ms (optional)
    * @param {function} options.onUpdate - Callback for analysis updates
+   * @param {number} options.multiPV - Number of lines to analyze (default: 1)
+   * @param {string[]} options.searchMoves - Restrict search to specific moves (UCI format)
    * @returns {Promise} Resolves with best move and evaluation
    */
   async analyzePosition(options = {}) {
@@ -68,7 +70,8 @@ class StockfishService {
       depth = 15,
       time = null,
       onUpdate = null,
-      multiPV = 1
+      multiPV = 1,
+      searchMoves = null
     } = options;
 
     if (!this.isReady) {
@@ -85,6 +88,8 @@ class StockfishService {
       // Set MultiPV if different from current
       if (multiPV > 1) {
         this.engine.setOption('MultiPV', String(multiPV));
+      } else {
+        this.engine.setOption('MultiPV', '1');
       }
 
       // Set up message listener for this analysis
@@ -94,9 +99,13 @@ class StockfishService {
           const info = this.parseInfo(message);
 
           if (info.multipv) {
-            // Store multiple lines
+            // Store multiple lines with consistent naming (evaluation instead of score)
             const lineIndex = info.multipv - 1;
-            lines[lineIndex] = info;
+            lines[lineIndex] = {
+              ...info,
+              evaluation: info.score, // Add evaluation alias for consistency
+              cp: info.score?.type === 'cp' ? info.score.value : undefined
+            };
           }
 
           if (onUpdate && info.depth) {
@@ -131,11 +140,19 @@ class StockfishService {
         }
       });
 
-      // Start analysis
+      // Start analysis with optional searchmoves restriction
       if (time) {
-        this.engine.goMovetime(time);
+        if (searchMoves && searchMoves.length > 0) {
+          this.engine.go({ movetime: time, searchmoves: searchMoves.join(' ') });
+        } else {
+          this.engine.goMovetime(time);
+        }
       } else {
-        this.engine.goDepth(depth);
+        if (searchMoves && searchMoves.length > 0) {
+          this.engine.go({ depth, searchmoves: searchMoves.join(' ') });
+        } else {
+          this.engine.goDepth(depth);
+        }
       }
 
       // Timeout

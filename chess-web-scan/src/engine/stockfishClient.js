@@ -1,6 +1,6 @@
 // Stockfish Client - Direct Worker Communication
 export class StockfishClient {
-  constructor(path = '/stockfish.js') {
+  constructor(path = '/stockfish-17.1-8e4d048.js') {
     this.worker = null;
     this._listeners = new Set();
     this._errorListeners = new Set();
@@ -157,6 +157,25 @@ export class StockfishClient {
     if (this.worker && !this._crashed) {
       this.worker.postMessage(`go movetime ${ms}`);
     }
+  }
+
+  // Generic go command with options support
+  go(options = {}) {
+    if (!this.worker || this._crashed) return;
+
+    let cmd = 'go';
+
+    if (options.depth) cmd += ` depth ${options.depth}`;
+    if (options.movetime) cmd += ` movetime ${options.movetime}`;
+    if (options.nodes) cmd += ` nodes ${options.nodes}`;
+    if (options.infinite) cmd += ' infinite';
+
+    // Add searchmoves restriction if specified
+    if (options.searchmoves) {
+      cmd += ` searchmoves ${options.searchmoves}`;
+    }
+
+    this.worker.postMessage(cmd);
   }
 
   terminate() {

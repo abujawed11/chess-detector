@@ -6,7 +6,8 @@
       "Bash(python organize_labels.py:*)",
       "Bash(python organize_pieces.py:*)",
       "Bash(npm install:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

@@ -4,11 +4,13 @@ import ChessBoard from './ChessBoard'
 import CornerAdjuster from './CornerAdjuster'
 import BoardEditor from './BoardEditor'
 import Analysis from './Analysis'
+import TestClassification from './TestClassification'
+import StockfishAnalysis from './StockfishAnalysis'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export default function App(){
-  const [currentPage, setCurrentPage] = useState('scanner') // 'scanner' or 'analysis'
+  const [currentPage, setCurrentPage] = useState('scanner') // 'scanner', 'analysis', or 'test'
   const [analysisFen, setAnalysisFen] = useState('') // FEN to analyze
   const [file, setFile] = useState(null)
   const [imgURL, setImgURL] = useState('')
@@ -169,6 +171,68 @@ export default function App(){
     );
   }
 
+  // Show Test page
+  if (currentPage === 'test') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('scanner')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Scanner
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Classification Test Suite</span>
+        </nav>
+        <TestClassification />
+      </>
+    );
+  }
+
+  // Show Stockfish Analysis page
+  if (currentPage === 'stockfish-analysis') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('scanner')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Scanner
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Stockfish 17.1 Analysis</span>
+        </nav>
+        <StockfishAnalysis />
+      </>
+    );
+  }
+
   return (
     <>
       {/* Navigation */}
@@ -180,34 +244,60 @@ export default function App(){
         marginBottom: 0
       }}>
         <h3 style={{ color: 'white', margin: 0 }}>Chess Detector</h3>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
-          <button
-            onClick={() => setCurrentPage('scanner')}
-            style={{
-              padding: '8px 16px',
-              background: currentPage === 'scanner' ? '#8b5cf6' : 'transparent',
-              color: 'white',
-              border: '2px solid #8b5cf6',
-              borderRadius: 6,
-              cursor: 'pointer'
-            }}
-          >
-            Scanner
-          </button>
-          <button
-            onClick={() => setCurrentPage('analysis')}
-            style={{
-              padding: '8px 16px',
-              background: currentPage === 'analysis' ? '#8b5cf6' : 'transparent',
-              color: 'white',
-              border: '2px solid #8b5cf6',
-              borderRadius: 6,
-              cursor: 'pointer'
-            }}
-          >
-            Analysis
-          </button>
-        </div>
+         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+           <button
+             onClick={() => setCurrentPage('scanner')}
+             style={{
+               padding: '8px 16px',
+               background: currentPage === 'scanner' ? '#8b5cf6' : 'transparent',
+               color: 'white',
+               border: '2px solid #8b5cf6',
+               borderRadius: 6,
+               cursor: 'pointer'
+             }}
+           >
+             Scanner
+           </button>
+           <button
+             onClick={() => setCurrentPage('analysis')}
+             style={{
+               padding: '8px 16px',
+               background: currentPage === 'analysis' ? '#8b5cf6' : 'transparent',
+               color: 'white',
+               border: '2px solid #8b5cf6',
+               borderRadius: 6,
+               cursor: 'pointer'
+             }}
+           >
+             Analysis
+           </button>
+           <button
+             onClick={() => setCurrentPage('test')}
+             style={{
+               padding: '8px 16px',
+               background: currentPage === 'test' ? '#f59e0b' : 'transparent',
+               color: 'white',
+               border: '2px solid #f59e0b',
+               borderRadius: 6,
+               cursor: 'pointer'
+             }}
+           >
+             🧪 Test Suite
+           </button>
+           <button
+             onClick={() => setCurrentPage('stockfish-analysis')}
+             style={{
+               padding: '8px 16px',
+               background: currentPage === 'stockfish-analysis' ? '#10b981' : 'transparent',
+               color: 'white',
+               border: '2px solid #10b981',
+               borderRadius: 6,
+               cursor: 'pointer'
+             }}
+           >
+             ⚡ SF Analysis
+           </button>
+         </div>
       </nav>
 
       <div style={{padding:20, maxWidth: 1400, margin: '0 auto'}}>

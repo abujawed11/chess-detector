@@ -4,7 +4,12 @@ import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
-import { classifyMove, scoreToCentipawns, calculateMaterial } from './utils/engineUtils';
+import {
+  evalForRoot,
+  normalizeLines,
+  classifyMove,
+  isOpeningPhase
+} from './utils/moveClassification';
 import './App.css';
 
 export default function Analysis({ initialFen }) {
@@ -77,9 +82,9 @@ export default function Analysis({ initialFen }) {
   const handleMove = useCallback(async (move, newFen) => {
     if (!initialized) return;
 
-    // Store analysis from BEFORE the move
+    // Store FEN and analysis from BEFORE the move
+    const previousFen = currentFen;
     const previousAnalysis = storedAnalysis;
-    const evalBefore = currentEval;
 
     // Clear one-time hint after move is played
     setHintRequested(false);
@@ -94,43 +99,99 @@ export default function Analysis({ initialFen }) {
         multiPV: 3
       });
 
-      const evalAfter = result.evaluation;
       const bestMoveForNewPosition = result.lines[0]?.pv[0];
 
       // Store this analysis for the next move
       setStoredAnalysis(result);
-      setCurrentEval(evalAfter);
+      setCurrentEval(result.evaluation);
 
       // Classify the move if we have previous analysis
-      let classification = { classification: 'best', label: 'Best Move', cpLoss: 0, color: '#9bc02a' };
+      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#9bc02a' };
 
       if (previousAnalysis && previousAnalysis.lines && previousAnalysis.lines.length > 0) {
-        const previousBestMove = previousAnalysis.lines[0]?.pv[0];
-        const movePlayed = move.from + move.to + (move.promotion || '');
+        try {
+          // Get the move that was played in UCI format
+          const movePlayed = move.from + move.to + (move.promotion || '');
 
-        // Convert evaluations to centipawns from the perspective of the player who just moved
-        const playerColor = game.turn() === 'w' ? 'b' : 'w'; // Player who just moved
+          // Create a Chess instance to determine whose turn it was
+          const tempChess = new Chess(previousFen);
+          const rootTurn = tempChess.turn();
 
-        // Evaluation before the move (from previous player's perspective)
-        const evalBeforeCp = evalBefore ? scoreToCentipawns(evalBefore, playerColor) : 0;
+          // Normalize lines from previous analysis
+          const lines = normalizeLines(previousAnalysis.lines, rootTurn);
+          const bestMove = lines[0]?.pv?.[0];
 
-        // Evaluation after our move (needs to be flipped since it's from opponent's perspective)
-        const evalAfterCp = -scoreToCentipawns(evalAfter, game.turn());
+          // Check for opening phase
+          const isBook = isOpeningPhase(previousFen);
 
-        // Best move evaluation (from the stored analysis)
-        // This represents what we WOULD have gotten if we played the best move
-        const bestMoveCp = evalBeforeCp; // The best move maintains or improves the evaluation
+          // Diagnostics
+          const pv2Gap = lines.length > 1 ? (lines[0].scoreForRoot - lines[1].scoreForRoot) : 0;
+          const forced = pv2Gap >= 200;
 
-        classification = classifyMove(evalBeforeCp, evalAfterCp, bestMoveCp, {
-          isBestMove: movePlayed.startsWith(previousBestMove),
-          missedMate: evalBefore?.type === 'mate' && evalAfter?.type !== 'mate'
-        });
+          // Score OUR move at the root using searchmoves
+          const ourRoot = await analyze(previousFen, {
+            depth: analysisDepth,
+            multiPV: 1,
+            searchMoves: [movePlayed],
+          });
+          const ourRootScore = evalForRoot(rootTurn, rootTurn, ourRoot.evaluation);
+
+          // Score BEST move at the root using searchmoves
+          const bestRoot = await analyze(previousFen, {
+            depth: analysisDepth,
+            multiPV: 1,
+            searchMoves: [bestMove],
+          });
+          const bestRootScore = evalForRoot(rootTurn, rootTurn, bestRoot.evaluation);
+
+          // Calculate CP-loss from root perspective
+          const cpLoss = Math.max(0, bestRootScore - ourRootScore);
+
+          // Top-N / epsilon rules
+          const eps = 10;
+          const inTop3 = lines.slice(0, 3).some(
+            l => l.pv[0]?.toLowerCase() === movePlayed.toLowerCase()
+          );
+          const ourLine = lines.find(
+            l => l.pv[0]?.toLowerCase() === movePlayed.toLowerCase()
+          );
+          const withinEps = ourLine ? (lines[0].scoreForRoot - ourLine.scoreForRoot) <= eps : false;
+
+          const missedMate =
+            (lines[0]?.evaluation?.type === 'mate') &&
+            (ourRoot.evaluation?.type !== 'mate');
+
+          // Count pieces for brilliant detection and game phase
+          const pieceCount = (previousFen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
+
+          // Brilliant move detection: ONLY move in a critical position (extremely forced)
+          const isBrilliant =
+            forced &&
+            pv2Gap >= 500 &&
+            cpLoss === 0 &&
+            !isBook &&
+            pieceCount >= 20 &&
+            pieceCount <= 30;
+
+          classification = classifyMove(cpLoss, {
+            inTop3,
+            withinEps,
+            forced,
+            missedMate,
+            isBook: isBook && cpLoss <= 10,
+            isBrilliant
+          });
+        } catch (classifyError) {
+          console.error('Classification error:', classifyError);
+          // Fallback to simple classification
+          classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#9bc02a' };
+        }
       }
 
       // Add move to history
       const newMove = {
         ...move,
-        evaluation: evalAfter,
+        evaluation: result.evaluation,
         classification: classification.classification,
         classificationLabel: classification.label,
         cpLoss: classification.cpLoss
@@ -151,7 +212,7 @@ export default function Analysis({ initialFen }) {
     } catch (err) {
       console.error('Analysis error:', err);
     }
-  }, [initialized, storedAnalysis, currentEval, analyze, analysisDepth, game, showBestMove]);
+  }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
 
   // Navigate to a specific move
   const navigateToMove = useCallback((moveIndex) => {

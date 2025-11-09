@@ -122,6 +122,7 @@ function getClassificationColor(classification) {
   const colors = {
     brilliant: '#1baca6',
     great: '#5c8bb0',
+    book: '#a88865',
     best: '#374151',
     excellent: '#374151',
     good: '#374151',
