@@ -128,6 +128,12 @@ export default function App(){
     setCurrentPage('analysis')
   }
 
+  function handleOpenEditor(fenToEdit){
+    setFEN(fenToEdit || analysisFen)
+    setShowEditor(true)
+    setCurrentPage('scanner')
+  }
+
   // Show board editor if active
   if (showEditor) {
     return (
@@ -167,7 +173,7 @@ export default function App(){
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Position Analysis</span>
         </nav>
-        <Analysis initialFen={analysisFen} />
+        <Analysis initialFen={analysisFen} onEditPosition={handleOpenEditor} />
       </>
     );
   }
