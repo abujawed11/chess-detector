@@ -6,6 +6,7 @@ import BoardEditor from './BoardEditor'
 import Analysis from './Analysis'
 import TestClassification from './TestClassification'
 import StockfishAnalysis from './StockfishAnalysis'
+import EngineTest from './EngineTest'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
@@ -233,6 +234,37 @@ export default function App(){
     );
   }
 
+  // Show Engine Test page
+  if (currentPage === 'engine-test') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('scanner')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Scanner
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Engine Thread Test</span>
+        </nav>
+        <EngineTest />
+      </>
+    );
+  }
+
   return (
     <>
       {/* Navigation */}
@@ -296,6 +328,19 @@ export default function App(){
              }}
            >
              ⚡ SF Analysis
+           </button>
+           <button
+             onClick={() => setCurrentPage('engine-test')}
+             style={{
+               padding: '8px 16px',
+               background: currentPage === 'engine-test' ? '#ef4444' : 'transparent',
+               color: 'white',
+               border: '2px solid #ef4444',
+               borderRadius: 6,
+               cursor: 'pointer'
+             }}
+           >
+             🚀 Engine Test
            </button>
          </div>
       </nav>

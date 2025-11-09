@@ -404,14 +404,107 @@ export default function Analysis({ initialFen }) {
         {/* Evaluation Bar */}
         <EvaluationBar score={currentEval} fen={currentFen} height={560} />
 
-        {/* Chess Board */}
-        <InteractiveBoard
-          fen={currentFen}
-          onMove={handleMove}
-          flipped={flipped}
-          bestMove={bestMove}
-          hoverMove={hoverMove}
-        />
+        {/* Chess Board and Navigation */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <InteractiveBoard
+            fen={currentFen}
+            onMove={handleMove}
+            flipped={flipped}
+            bestMove={bestMove}
+            hoverMove={hoverMove}
+          />
+
+          {/* Move Navigation Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'center'
+          }}>
+            <button
+              onClick={() => navigateToMove(-1)}
+              disabled={currentMoveIndex === -1}
+              style={{
+                padding: '12px 20px',
+                background: currentMoveIndex === -1 ? '#4b5563' : '#374151',
+                color: currentMoveIndex === -1 ? '#6b7280' : 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
+                fontSize: 18,
+                fontWeight: 600,
+                minWidth: 60,
+                opacity: currentMoveIndex === -1 ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+              title="First move"
+            >
+              ⏮
+            </button>
+
+            <button
+              onClick={() => navigateToMove(currentMoveIndex - 1)}
+              disabled={currentMoveIndex === -1}
+              style={{
+                padding: '12px 20px',
+                background: currentMoveIndex === -1 ? '#4b5563' : '#374151',
+                color: currentMoveIndex === -1 ? '#6b7280' : 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
+                fontSize: 18,
+                fontWeight: 600,
+                minWidth: 60,
+                opacity: currentMoveIndex === -1 ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+              title="Previous move"
+            >
+              ◀
+            </button>
+
+            <button
+              onClick={() => navigateToMove(currentMoveIndex + 1)}
+              disabled={currentMoveIndex === moves.length - 1}
+              style={{
+                padding: '12px 20px',
+                background: currentMoveIndex === moves.length - 1 ? '#4b5563' : '#374151',
+                color: currentMoveIndex === moves.length - 1 ? '#6b7280' : 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: currentMoveIndex === moves.length - 1 ? 'not-allowed' : 'pointer',
+                fontSize: 18,
+                fontWeight: 600,
+                minWidth: 60,
+                opacity: currentMoveIndex === moves.length - 1 ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+              title="Next move"
+            >
+              ▶
+            </button>
+
+            <button
+              onClick={() => navigateToMove(moves.length - 1)}
+              disabled={currentMoveIndex === moves.length - 1}
+              style={{
+                padding: '12px 20px',
+                background: currentMoveIndex === moves.length - 1 ? '#4b5563' : '#374151',
+                color: currentMoveIndex === moves.length - 1 ? '#6b7280' : 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: currentMoveIndex === moves.length - 1 ? 'not-allowed' : 'pointer',
+                fontSize: 18,
+                fontWeight: 600,
+                minWidth: 60,
+                opacity: currentMoveIndex === moves.length - 1 ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+              title="Last move"
+            >
+              ⏭
+            </button>
+          </div>
+        </div>
 
         {/* Right Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -35,7 +35,17 @@ class StockfishService {
       this.engine.setOption('UCI_AnalyseMode', 'true');
       this.engine.setOption('MultiPV', '3'); // Get top 3 moves
 
-      console.log('✅ Stockfish engine initialized successfully');
+      // Enable multi-threading for maximum strength
+      const threads = 4; // Fixed at 4 threads for stability
+      this.engine.setOption('Threads', String(threads));
+
+      // Set hash table size (256MB for optimal performance)
+      this.engine.setOption('Hash', '256');
+
+      console.log('✅ Stockfish 17.1 initialized successfully');
+      console.log(`  🧵 Threads: ${threads}`);
+      console.log(`  💾 Hash: 256 MB`);
+      console.log(`  📊 MultiPV: 3`);
 
       return Promise.resolve();
     } catch (error) {
@@ -74,6 +84,8 @@ class StockfishService {
       searchMoves = null
     } = options;
 
+    console.log('🔍 Starting analysis:', { depth, time, multiPV, searchMoves });
+
     if (!this.isReady) {
       await this.init();
     }
@@ -84,6 +96,8 @@ class StockfishService {
       let bestMove = null;
       let evaluation = null;
       let lines = [];
+      let messageCount = 0;
+      const startTime = Date.now();
 
       // Set MultiPV if different from current
       if (multiPV > 1) {
@@ -94,6 +108,13 @@ class StockfishService {
 
       // Set up message listener for this analysis
       const unsubscribe = this.engine.onMessage((message) => {
+        messageCount++;
+
+        // Log EVERY message for first 5, then every 10th
+        if (messageCount <= 5 || messageCount % 10 === 0) {
+          console.log(`📨 Service received message #${messageCount} (${((Date.now() - startTime) / 1000).toFixed(1)}s):`, message.substring(0, 100));
+        }
+
         // Parse info messages
         if (message.startsWith('info')) {
           const info = this.parseInfo(message);
@@ -129,6 +150,9 @@ class StockfishService {
             evaluation = lines[0].score;
           }
 
+          const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          console.log(`✅ Analysis complete in ${elapsedTime}s, ${messageCount} messages, bestmove: ${bestMove}`);
+
           this.analyzing = false;
           unsubscribe(); // Remove listener
 
@@ -140,30 +164,40 @@ class StockfishService {
         }
       });
 
+      // Stop any ongoing analysis first
+      this.engine.stop();
+      console.log('🛑 Stopped any previous analysis');
+
       // Start analysis with optional searchmoves restriction
       if (time) {
+        console.log(`⏱️  Starting time-based search: ${time}ms`);
         if (searchMoves && searchMoves.length > 0) {
           this.engine.go({ movetime: time, searchmoves: searchMoves.join(' ') });
         } else {
           this.engine.goMovetime(time);
         }
       } else {
+        console.log(`📊 Starting depth-based search: depth ${depth}`);
         if (searchMoves && searchMoves.length > 0) {
+          console.log(`  🎯 Restricting to moves: ${searchMoves.join(', ')}`);
           this.engine.go({ depth, searchmoves: searchMoves.join(' ') });
         } else {
           this.engine.goDepth(depth);
         }
       }
 
-      // Timeout
-      const timeout = time || depth * 2000; // 2 seconds per depth level
+      // Timeout - increased for multi-threaded engine
+      const timeout = time || depth * 5000; // 5 seconds per depth level (was 2)
+      console.log(`⏳ Timeout set to ${(timeout + 10000) / 1000}s`);
+
       setTimeout(() => {
         if (this.analyzing) {
+          console.error(`❌ TIMEOUT after ${((Date.now() - startTime) / 1000).toFixed(2)}s - received ${messageCount} messages`);
           this.stop();
           unsubscribe();
           reject(new Error('Analysis timeout'));
         }
-      }, timeout + 5000);
+      }, timeout + 10000); // Increased buffer from 5s to 10s
     });
   }
 

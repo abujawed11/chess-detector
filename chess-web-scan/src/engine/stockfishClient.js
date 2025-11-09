@@ -25,8 +25,22 @@ export class StockfishClient {
   _setupWorkerHandlers() {
     if (!this.worker) return;
 
+    let messageCounter = 0;
+
     this.worker.onmessage = (e) => {
       const msg = String(e.data);
+      messageCounter++;
+
+      // Log UCI protocol messages
+      if (msg.includes('uciok') || msg.includes('readyok') || msg.startsWith('bestmove')) {
+        console.log('📥 Engine response:', msg);
+      }
+
+      // Log info messages (every 5th one to avoid spam)
+      if (msg.startsWith('info') && messageCounter % 5 === 0) {
+        console.log('📥 Analysis info #' + messageCounter + ':', msg.substring(0, 80) + '...');
+      }
+
       // Forward every line to listeners
       for (const fn of this._listeners) fn(msg);
 
@@ -137,19 +151,28 @@ export class StockfishClient {
 
   setOption(name, value) {
     if (this.worker && !this._crashed) {
+      console.log('📤 Sending to engine: setoption name', name, 'value', value);
       this.worker.postMessage(`setoption name ${name} value ${value}`);
+    } else {
+      console.error('❌ Cannot send setoption - worker crashed or not available');
     }
   }
 
   positionFen(fen) {
     if (this.worker && !this._crashed) {
+      console.log('📤 Sending to engine: position fen', fen.substring(0, 50) + '...');
       this.worker.postMessage(`position fen ${fen}`);
+    } else {
+      console.error('❌ Cannot send position - worker crashed or not available');
     }
   }
 
   goDepth(depth) {
     if (this.worker && !this._crashed) {
+      console.log('📤 Sending to engine: go depth', depth);
       this.worker.postMessage(`go depth ${depth}`);
+    } else {
+      console.error('❌ Cannot send go depth - worker crashed or not available');
     }
   }
 
@@ -161,7 +184,10 @@ export class StockfishClient {
 
   // Generic go command with options support
   go(options = {}) {
-    if (!this.worker || this._crashed) return;
+    if (!this.worker || this._crashed) {
+      console.error('❌ Cannot send go command - worker crashed or not available');
+      return;
+    }
 
     let cmd = 'go';
 
@@ -175,6 +201,7 @@ export class StockfishClient {
       cmd += ` searchmoves ${options.searchmoves}`;
     }
 
+    console.log('📤 Sending to engine:', cmd);
     this.worker.postMessage(cmd);
   }
 
