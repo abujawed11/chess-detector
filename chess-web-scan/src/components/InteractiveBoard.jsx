@@ -5,7 +5,7 @@ import { getPieceImageUrl } from '../utils/chessUtils';
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-export default function InteractiveBoard({ fen, onMove, highlightSquares = [], flipped = false, bestMove = null }) {
+export default function InteractiveBoard({ fen, onMove, highlightSquares = [], flipped = false, bestMove = null, hoverMove = null }) {
   const [chess] = useState(new Chess(fen));
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragFrom, setDragFrom] = useState(null);
@@ -245,6 +245,123 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
     }
   }
 
+  // Parse and draw arrow for hover move (blue/purple)
+  const renderHoverArrow = () => {
+    if (!hoverMove || hoverMove.length < 4) return null;
+
+    const from = hoverMove.substring(0, 2);
+    const to = hoverMove.substring(2, 4);
+
+    const fromCoords = squareToCoords(from);
+    const toCoords = squareToCoords(to);
+
+    // Calculate arrow direction
+    const dx = toCoords.x - fromCoords.x;
+    const dy = toCoords.y - fromCoords.y;
+    const angle = Math.atan2(dy, dx);
+
+    // Shorten arrow to not overlap pieces much
+    const shortenStart = 20;
+    const shortenEnd = 15;
+    const arrowStartX = fromCoords.x + Math.cos(angle) * shortenStart;
+    const arrowStartY = fromCoords.y + Math.sin(angle) * shortenStart;
+    const arrowEndX = toCoords.x - Math.cos(angle) * shortenEnd;
+    const arrowEndY = toCoords.y - Math.sin(angle) * shortenEnd;
+
+    // Create a smooth arrowhead triangle
+    const headLength = 28;
+    const headWidth = 24;
+
+    // Calculate perpendicular vector for arrowhead width
+    const perpAngle = angle + Math.PI / 2;
+    const halfWidth = headWidth / 2;
+
+    // Arrowhead triangle points
+    const tipX = arrowEndX;
+    const tipY = arrowEndY;
+
+    const baseX = arrowEndX - Math.cos(angle) * headLength;
+    const baseY = arrowEndY - Math.sin(angle) * headLength;
+
+    const base1X = baseX + Math.cos(perpAngle) * halfWidth;
+    const base1Y = baseY + Math.sin(perpAngle) * halfWidth;
+    const base2X = baseX - Math.cos(perpAngle) * halfWidth;
+    const base2Y = baseY - Math.sin(perpAngle) * halfWidth;
+
+    return (
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: 560,
+          height: 560,
+          pointerEvents: 'none',
+          zIndex: 9
+        }}
+      >
+        <defs>
+          {/* Gradient for hover arrow - blue/purple */}
+          <linearGradient id="hoverArrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style={{ stopColor: '#6366f1', stopOpacity: 0.85 }} />
+            <stop offset="100%" style={{ stopColor: '#8b5cf6', stopOpacity: 0.9 }} />
+          </linearGradient>
+        </defs>
+
+        {/* Outer glow layer */}
+        <line
+          x1={arrowStartX}
+          y1={arrowStartY}
+          x2={baseX}
+          y2={baseY}
+          stroke="#8b5cf6"
+          strokeWidth="18"
+          strokeLinecap="round"
+          opacity="0.2"
+        />
+
+        {/* Arrow shaft */}
+        <line
+          x1={arrowStartX}
+          y1={arrowStartY}
+          x2={baseX}
+          y2={baseY}
+          stroke="url(#hoverArrowGradient)"
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+
+        {/* Arrowhead */}
+        <polygon
+          points={`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`}
+          fill="url(#hoverArrowGradient)"
+          stroke="#6366f1"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+
+        {/* Highlight on shaft */}
+        <line
+          x1={arrowStartX}
+          y1={arrowStartY}
+          x2={baseX}
+          y2={baseY}
+          stroke="#a78bfa"
+          strokeWidth="5"
+          strokeLinecap="round"
+          opacity="0.6"
+        />
+
+        {/* Highlight on arrowhead */}
+        <polygon
+          points={`${tipX},${tipY} ${(tipX + base1X) / 2},${(tipY + base1Y) / 2} ${(tipX + base2X) / 2},${(tipY + base2Y) / 2}`}
+          fill="#c4b5fd"
+          opacity="0.5"
+        />
+      </svg>
+    );
+  };
+
   // Parse and draw arrow for best move
   const renderArrow = () => {
     if (!bestMove || bestMove.length < 4) return null;
@@ -438,6 +555,7 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
       }}>
         {squares}
       </div>
+      {renderHoverArrow()}
       {renderArrow()}
     </div>
   );

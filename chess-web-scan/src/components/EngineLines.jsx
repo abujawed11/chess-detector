@@ -4,7 +4,7 @@ import { useState } from 'react';
  * EngineLines - Displays multiple engine analysis lines (MultiPV)
  * Similar to Chess.com's analysis panel
  */
-export default function EngineLines({ lines, depth, turn, onLineClick }) {
+export default function EngineLines({ lines, depth, turn, onLineClick, onLineHover }) {
   const [expandedLine, setExpandedLine] = useState(null);
 
   console.log('📊 EngineLines received:', { lines, depth, turn, linesCount: lines?.length });
@@ -73,6 +73,9 @@ export default function EngineLines({ lines, depth, turn, onLineClick }) {
               setExpandedLine(expandedLine === index ? null : index);
               onLineClick?.(line);
             }}
+            onHover={(move) => {
+              onLineHover?.(move);
+            }}
           />
         ))}
       </div>
@@ -80,9 +83,12 @@ export default function EngineLines({ lines, depth, turn, onLineClick }) {
   );
 }
 
-function EngineLine({ line, lineNumber, turn, isExpanded, onClick }) {
+function EngineLine({ line, lineNumber, turn, isExpanded, onClick, onHover }) {
   const evaluation = line.evaluation || line.score || { type: 'cp', value: 0 };
   const pv = line.pv || [];
+
+  // Get the first move of this line for hover arrow
+  const firstMove = pv[0] || null;
 
   // Format evaluation
   const formatEval = (eval_obj, fromWhite = true) => {
@@ -147,11 +153,15 @@ function EngineLine({ line, lineNumber, turn, isExpanded, onClick }) {
         if (!isExpanded) {
           e.currentTarget.style.background = '#2d3748';
         }
+        // Call hover callback with first move
+        onHover?.(firstMove);
       }}
       onMouseLeave={(e) => {
         if (!isExpanded) {
           e.currentTarget.style.background = 'transparent';
         }
+        // Clear hover arrow
+        onHover?.(null);
       }}
     >
       {/* Line header with evaluation */}

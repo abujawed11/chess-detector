@@ -34,6 +34,7 @@ export default function Analysis({ initialFen }) {
   const [storedAnalysis, setStoredAnalysis] = useState(null); // Store analysis before move
   const [engineLines, setEngineLines] = useState([]); // Top engine lines
   const [isProcessingMove, setIsProcessingMove] = useState(false); // Prevent auto-analyze during move processing
+  const [hoverMove, setHoverMove] = useState(null); // Move to display when hovering over engine lines
 
   // Update game when initialFen changes
   useEffect(() => {
@@ -409,6 +410,7 @@ export default function Analysis({ initialFen }) {
           onMove={handleMove}
           flipped={flipped}
           bestMove={bestMove}
+          hoverMove={hoverMove}
         />
 
         {/* Right Panel */}
@@ -524,6 +526,9 @@ export default function Analysis({ initialFen }) {
               turn={currentFen.split(' ')[1]}
               onLineClick={(line) => {
                 console.log('Selected line:', line);
+              }}
+              onLineHover={(move) => {
+                setHoverMove(move);
               }}
             />
           )}
