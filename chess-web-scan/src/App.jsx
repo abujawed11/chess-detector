@@ -7,11 +7,12 @@ import Analysis from './Analysis'
 import TestClassification from './TestClassification'
 import StockfishAnalysis from './StockfishAnalysis'
 import EngineTest from './EngineTest'
+import Home from './Home'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export default function App(){
-  const [currentPage, setCurrentPage] = useState('scanner') // 'scanner', 'analysis', or 'test'
+  const [currentPage, setCurrentPage] = useState('home') // 'home', 'scanner', 'analysis', or 'test'
   const [analysisFen, setAnalysisFen] = useState('') // FEN to analyze
   const [file, setFile] = useState(null)
   const [imgURL, setImgURL] = useState('')
@@ -134,6 +135,11 @@ export default function App(){
     setCurrentPage('scanner')
   }
 
+  // Show Home page
+  if (currentPage === 'home') {
+    return <Home onNavigate={setCurrentPage} />;
+  }
+
   // Show board editor if active
   if (showEditor) {
     return (
@@ -159,7 +165,7 @@ export default function App(){
           marginBottom: 0
         }}>
           <button
-            onClick={() => setCurrentPage('scanner')}
+            onClick={() => setCurrentPage('home')}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
@@ -169,7 +175,7 @@ export default function App(){
               cursor: 'pointer'
             }}
           >
-            ← Back to Scanner
+            ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Position Analysis</span>
         </nav>
@@ -190,7 +196,7 @@ export default function App(){
           marginBottom: 0
         }}>
           <button
-            onClick={() => setCurrentPage('scanner')}
+            onClick={() => setCurrentPage('home')}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
@@ -200,7 +206,7 @@ export default function App(){
               cursor: 'pointer'
             }}
           >
-            ← Back to Scanner
+            ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Classification Test Suite</span>
         </nav>
@@ -221,7 +227,7 @@ export default function App(){
           marginBottom: 0
         }}>
           <button
-            onClick={() => setCurrentPage('scanner')}
+            onClick={() => setCurrentPage('home')}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
@@ -231,7 +237,7 @@ export default function App(){
               cursor: 'pointer'
             }}
           >
-            ← Back to Scanner
+            ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Stockfish 17.1 Analysis</span>
         </nav>
@@ -252,7 +258,7 @@ export default function App(){
           marginBottom: 0
         }}>
           <button
-            onClick={() => setCurrentPage('scanner')}
+            onClick={() => setCurrentPage('home')}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
@@ -262,7 +268,7 @@ export default function App(){
               cursor: 'pointer'
             }}
           >
-            ← Back to Scanner
+            ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Engine Thread Test</span>
         </nav>
@@ -281,7 +287,20 @@ export default function App(){
         gap: 16,
         marginBottom: 0
       }}>
-        <h3 style={{ color: 'white', margin: 0 }}>Chess Detector</h3>
+        <button
+          onClick={() => setCurrentPage('home')}
+          style={{
+            padding: '8px 16px',
+            background: '#6b7280',
+            color: 'white',
+            border: 'none',
+            borderRadius: 6,
+            cursor: 'pointer'
+          }}
+        >
+          ← Back to Home
+        </button>
+        <h3 style={{ color: 'white', margin: 0 }}>Chess Image Scanner</h3>
          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
            <button
              onClick={() => setCurrentPage('scanner')}
