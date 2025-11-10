@@ -8,6 +8,7 @@ import TestClassification from './TestClassification'
 import StockfishAnalysis from './StockfishAnalysis'
 import EngineTest from './EngineTest'
 import Home from './Home'
+import PGNAnalysis from './PGNAnalysis'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
@@ -273,6 +274,37 @@ export default function App(){
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Engine Thread Test</span>
         </nav>
         <EngineTest />
+      </>
+    );
+  }
+
+  // Show PGN Analysis page
+  if (currentPage === 'pgn-analysis') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('home')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Home
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>PGN Game Analysis</span>
+        </nav>
+        <PGNAnalysis />
       </>
     );
   }

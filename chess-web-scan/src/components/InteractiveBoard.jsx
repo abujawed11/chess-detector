@@ -1,17 +1,79 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { getPieceImageUrl } from '../utils/chessUtils';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-export default function InteractiveBoard({ fen, onMove, highlightSquares = [], flipped = false, bestMove = null, hoverMove = null }) {
+// Move classification badge styles
+const BADGE_STYLES = {
+  brilliant: {
+    gradient: 'from-emerald-400 to-cyan-400',
+    shadow: 'shadow-[0_0_25px_rgba(16,185,129,0.6)]',
+    icon: '💎',
+    glow: 'rgba(16, 185, 129, 0.4)'
+  },
+  best: {
+    gradient: 'from-emerald-500 to-green-500',
+    shadow: 'shadow-[0_0_20px_rgba(34,197,94,0.5)]',
+    icon: '✓',
+    glow: 'rgba(34, 197, 94, 0.3)'
+  },
+  excellent: {
+    gradient: 'from-blue-400 to-blue-600',
+    shadow: 'shadow-[0_0_20px_rgba(59,130,246,0.5)]',
+    icon: '👍',
+    glow: 'rgba(59, 130, 246, 0.3)'
+  },
+  good: {
+    gradient: 'from-slate-400 to-slate-600',
+    shadow: 'shadow-[0_0_15px_rgba(100,116,139,0.4)]',
+    icon: '✓',
+    glow: 'rgba(100, 116, 139, 0.3)'
+  },
+  inaccuracy: {
+    gradient: 'from-yellow-400 to-amber-500',
+    shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.5)]',
+    icon: '?',
+    glow: 'rgba(251, 191, 36, 0.4)'
+  },
+  mistake: {
+    gradient: 'from-orange-400 to-orange-600',
+    shadow: 'shadow-[0_0_22px_rgba(251,146,60,0.6)]',
+    icon: '!',
+    glow: 'rgba(251, 146, 60, 0.4)'
+  },
+  blunder: {
+    gradient: 'from-red-500 to-red-700',
+    shadow: 'shadow-[0_0_25px_rgba(239,68,68,0.7)]',
+    icon: '⚠',
+    glow: 'rgba(239, 68, 68, 0.5)'
+  },
+  book: {
+    gradient: 'from-amber-600 to-yellow-700',
+    shadow: 'shadow-[0_0_15px_rgba(217,119,6,0.4)]',
+    icon: '📖',
+    glow: 'rgba(217, 119, 6, 0.3)'
+  }
+};
+
+export default function InteractiveBoard({
+  fen,
+  onMove,
+  highlightSquares = [],
+  flipped = false,
+  bestMove = null,
+  hoverMove = null,
+  moveBadge = null, // { square: 'e4', classification: 'brilliant', label: 'Brilliant' }
+  lastMove = null // { from: 'e2', to: 'e4' }
+}) {
   const [chess] = useState(new Chess(fen));
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragFrom, setDragFrom] = useState(null);
   const [hoveredSquare, setHoveredSquare] = useState(null);
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
+  const [promotionDialog, setPromotionDialog] = useState(null); // { from, to }
 
   // Update chess position when FEN changes
   if (chess.fen() !== fen) {
@@ -28,6 +90,33 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
     return board[row][file];
   }, [board]);
 
+  // Check if move is a promotion
+  const isPromotion = useCallback((from, to) => {
+    const piece = getPieceAt(from);
+    if (!piece || piece.type !== 'p') return false;
+
+    const toRank = parseInt(to[1]);
+    return (piece.color === 'w' && toRank === 8) || (piece.color === 'b' && toRank === 1);
+  }, [getPieceAt]);
+
+  // Handle promotion piece selection
+  const handlePromotion = useCallback((piece) => {
+    if (!promotionDialog) return;
+
+    const { from, to } = promotionDialog;
+    const moveResult = chess.move({ from, to, promotion: piece });
+
+    if (moveResult && onMove) {
+      onMove(moveResult, chess.fen());
+    }
+
+    setPromotionDialog(null);
+    setSelectedSquare(null);
+    setLegalMoves([]);
+    setDraggedPiece(null);
+    setDragFrom(null);
+  }, [promotionDialog, chess, onMove]);
+
   // Handle square click
   const handleSquareClick = useCallback((square) => {
     if (selectedSquare) {
@@ -36,12 +125,17 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
       const move = moves.find(m => m.to === square);
 
       if (move) {
-        const moveResult = chess.move({ from: selectedSquare, to: square, promotion: 'q' });
-        if (moveResult && onMove) {
-          onMove(moveResult, chess.fen());
+        // Check if it's a promotion
+        if (isPromotion(selectedSquare, square)) {
+          setPromotionDialog({ from: selectedSquare, to: square });
+        } else {
+          const moveResult = chess.move({ from: selectedSquare, to: square });
+          if (moveResult && onMove) {
+            onMove(moveResult, chess.fen());
+          }
+          setSelectedSquare(null);
+          setLegalMoves([]);
         }
-        setSelectedSquare(null);
-        setLegalMoves([]);
       } else {
         // Click on another piece of same color
         const piece = getPieceAt(square);
@@ -63,7 +157,7 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
         setLegalMoves(moves.map(m => m.to));
       }
     }
-  }, [selectedSquare, chess, onMove, getPieceAt]);
+  }, [selectedSquare, chess, onMove, getPieceAt, isPromotion]);
 
   // Drag handlers
   const handleDragStart = useCallback((e, square) => {
@@ -99,17 +193,24 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
     const move = moves.find(m => m.to === square);
 
     if (move) {
-      const moveResult = chess.move({ from: dragFrom, to: square, promotion: 'q' });
-      if (moveResult && onMove) {
-        onMove(moveResult, chess.fen());
+      // Check if it's a promotion
+      if (isPromotion(dragFrom, square)) {
+        setPromotionDialog({ from: dragFrom, to: square });
+      } else {
+        const moveResult = chess.move({ from: dragFrom, to: square });
+        if (moveResult && onMove) {
+          onMove(moveResult, chess.fen());
+        }
+        setDraggedPiece(null);
+        setDragFrom(null);
+        setSelectedSquare(null);
+        setLegalMoves([]);
       }
+    } else {
+      setDraggedPiece(null);
+      setDragFrom(null);
     }
-
-    setDraggedPiece(null);
-    setDragFrom(null);
-    setSelectedSquare(null);
-    setLegalMoves([]);
-  }, [dragFrom, chess, onMove]);
+  }, [dragFrom, chess, onMove, isPromotion]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedPiece(null);
@@ -151,6 +252,7 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
       const isHovered = hoveredSquare === square;
       const isHighlighted = highlightSquares.includes(square);
       const isDragging = dragFrom === square;
+      const isLastMoveSquare = lastMove && (square === lastMove.from || square === lastMove.to);
 
       squares.push(
         <div
@@ -162,6 +264,8 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
             position: 'relative',
             background: isSelected
               ? '#baca44'
+              : isLastMoveSquare
+              ? (isLight ? '#cdd26a' : '#aaa23a')
               : isHighlighted
               ? '#aaa23a'
               : isHovered && dragFrom
@@ -532,6 +636,89 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
     );
   };
 
+  // Render move classification badge (Chess.com style - on square corners)
+  const renderMoveBadge = () => {
+    console.log('🔍 renderMoveBadge called, moveBadge:', moveBadge);
+    
+    if (!moveBadge || !moveBadge.square || !moveBadge.classification) {
+      console.log('❌ Badge not rendered - missing data');
+      return null;
+    }
+
+    const badgeStyle = BADGE_STYLES[moveBadge.classification];
+    if (!badgeStyle) {
+      console.log('❌ Badge style not found for:', moveBadge.classification);
+      return null;
+    }
+    
+    console.log('✅ Rendering badge with style:', badgeStyle);
+
+    // Get square position
+    const file = moveBadge.square[0];
+    const rank = parseInt(moveBadge.square[1]);
+    
+    const displayFiles = flipped ? [...FILES].reverse() : FILES;
+    const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
+    
+    const fileIdx = displayFiles.indexOf(file);
+    const rankIdx = displayRanks.indexOf(rank);
+    
+    const squareSize = 560 / 8;
+    
+    // Position badge at top-right corner of the square (like Chess.com)
+    const badgeX = (fileIdx + 1) * squareSize - 8; // Right edge minus padding
+    const badgeY = rankIdx * squareSize + 8; // Top edge plus padding
+    
+    return (
+      <div
+        className="pointer-events-none absolute z-20"
+        style={{
+          left: badgeX,
+          top: badgeY,
+          transform: 'translate(-100%, 0%)',
+        }}
+      >
+        {/* Outer glow ring (pulsing) */}
+        <div
+          className="absolute inset-0 rounded-full blur-md animate-pulse"
+          style={{
+            background: badgeStyle.glow,
+            transform: 'scale(1.8)',
+            opacity: 0.6
+          }}
+        />
+        
+        {/* Badge icon circle */}
+        <div
+          className={`
+            relative flex h-8 w-8 items-center justify-center rounded-full
+            bg-gradient-to-br ${badgeStyle.gradient}
+            ${badgeStyle.shadow} ring-2 ring-white/50
+            animate-[bounceIn_0.3s_ease-out]
+          `}
+        >
+          <span className="text-base font-bold text-white drop-shadow-lg">
+            {badgeStyle.icon}
+          </span>
+        </div>
+        
+        {/* Label tooltip (appears on hover, but always visible for now) */}
+        {moveBadge.label && (
+          <div
+            className={`
+              absolute left-1/2 top-full mt-1 -translate-x-1/2
+              whitespace-nowrap rounded-md bg-gradient-to-br ${badgeStyle.gradient}
+              px-2 py-1 text-xs font-bold text-white shadow-lg
+              animate-[slideDown_0.3s_ease-out_0.2s_both]
+            `}
+          >
+            {moveBadge.label}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{
       width: 560,
@@ -557,6 +744,132 @@ export default function InteractiveBoard({ fen, onMove, highlightSquares = [], f
       </div>
       {renderHoverArrow()}
       {renderArrow()}
+      {renderMoveBadge()}
+
+      {/* Promotion Dialog */}
+      {promotionDialog && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            backdropFilter: 'blur(4px)'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: 16,
+              padding: 24,
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
+              animation: 'promotionPopIn 0.3s ease-out'
+            }}
+          >
+            <div style={{
+              textAlign: 'center',
+              marginBottom: 16,
+              color: 'white',
+              fontSize: 18,
+              fontWeight: 700
+            }}>
+              Choose Promotion Piece
+            </div>
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center'
+            }}>
+              {['q', 'r', 'b', 'n'].map(piece => {
+                const pieceColor = chess.turn();
+                const pieceType = pieceColor === 'w' ? piece.toUpperCase() : piece.toLowerCase();
+                return (
+                  <button
+                    key={piece}
+                    onClick={() => handlePromotion(piece)}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      background: 'white',
+                      border: '3px solid rgba(255, 255, 255, 0.3)',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.1) translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                    }}
+                  >
+                    <img
+                      src={getPieceImageUrl(pieceType)}
+                      alt={piece}
+                      style={{
+                        width: '90%',
+                        height: '90%',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add custom animations */}
+      <style>{`
+        @keyframes bounceIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.3);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes slideDown {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+
+        @keyframes promotionPopIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.8) translateY(-20px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

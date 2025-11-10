@@ -172,7 +172,7 @@ export function isOpeningPhase(fen) {
  * @returns {Promise<Object>} Classification result with details
  */
 export async function analyzeMoveClassification(stockfish, fen, move, options = {}) {
-  const { depth = 20, epsilon = 10 } = options;
+  const { depth = 20, epsilon = 10, skipBrilliant = false } = options;
 
   const Chess = (await import('chess.js/dist/esm/chess.js')).Chess;
   const rootChess = new Chess(fen);
@@ -230,7 +230,8 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   let brilliantAnalysis = null;
 
   // Quick pre-check to avoid expensive brilliant analysis
-  if (shouldCheckBrilliant(fen, move, cpLoss, forced)) {
+  // Skip if explicitly requested (for faster batch analysis)
+  if (!skipBrilliant && shouldCheckBrilliant(fen, move, cpLoss, forced)) {
     try {
       brilliantAnalysis = await analyzeBrilliantMove(stockfish, fen, move, {
         depth,

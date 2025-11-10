@@ -47,6 +47,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [hintRequested, setHintRequested] = useState(false);
 
   const [lastMoveClassification, setLastMoveClassification] = useState(null);
+  const [lastMove, setLastMove] = useState(null); // { from: 'e2', to: 'e4' }
   const [analysisDepth, setAnalysisDepth] = useState(15);
   const [storedAnalysis, setStoredAnalysis] = useState(null);
   const [engineLines, setEngineLines] = useState([]);
@@ -142,6 +143,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
     setLastMoveClassification(null);
     setBestMove(null);
     setCurrentFen(newFen);
+    
+    // Track last move for highlighting
+    setLastMove({ from: move.from, to: move.to });
 
     // Check if the new position is game over
     let isGameOverPosition = false;
@@ -252,8 +256,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
           isBrilliantV2: currentMove.isBrilliantV2,
           brilliantAnalysis: currentMove.brilliantAnalysis
         });
+        // Set last move for highlighting
+        setLastMove({ from: currentMove.from, to: currentMove.to });
       } else {
         setLastMoveClassification(null);
+        setLastMove(null);
       }
     } catch (error) {
       console.error('Error navigating to move:', error);
@@ -455,6 +462,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
               flipped={flipped}
               bestMove={bestMove}
               hoverMove={hoverMove}
+              lastMove={lastMove}
             />
             {!initialized && (
               <div className="absolute inset-0 bg-slate-100">

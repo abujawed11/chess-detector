@@ -22,7 +22,7 @@ export default function Home({ onNavigate }) {
       description: 'Upload a PGN file to analyze an entire chess game with detailed move classifications',
       icon: '📄',
       color: 'from-blue-500 to-blue-700',
-      action: () => alert('PGN upload feature coming soon!')
+      action: () => onNavigate('pgn-analysis')
     },
     {
       id: 'play-computer',
@@ -79,8 +79,8 @@ export default function Home({ onNavigate }) {
         // Handle image upload - navigate to scanner
         onNavigate('scanner');
       } else if (file.name.endsWith('.pgn')) {
-        // Handle PGN upload
-        alert('PGN analysis coming soon!');
+        // Handle PGN upload - navigate to PGN analysis
+        onNavigate('pgn-analysis');
       }
     }
   };
