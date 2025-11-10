@@ -7,7 +7,7 @@ import { useState } from 'react';
 export default function EngineLines({ lines, depth, turn, onLineClick, onLineHover }) {
   const [expandedLine, setExpandedLine] = useState(null);
 
-  console.log('📊 EngineLines received:', { lines, depth, turn, linesCount: lines?.length });
+  // console.log('📊 EngineLines received:', { lines, depth, turn, linesCount: lines?.length });
 
   if (!lines || lines.length === 0) {
     return (

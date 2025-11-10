@@ -1056,6 +1056,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
   const turn = currentFen.split(' ')[1];
 
+  // Check for game over states
+  const isGameOver = game.isCheckmate() || game.isStalemate() || game.isDraw();
+  const gameStatus = game.isCheckmate()
+    ? `Checkmate! ${game.turn() === 'w' ? 'Black' : 'White'} wins`
+    : game.isStalemate()
+    ? 'Stalemate - Draw'
+    : game.isDraw()
+    ? 'Draw'
+    : null;
+
   return (
     <div className="mx-auto max-w-[1600px] p-5 text-slate-900">
       {/* Header */}
@@ -1231,23 +1241,33 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
         {/* Right panel (sticky) */}
         <div className="sticky top-4 w-[420px] flex-shrink-0 space-y-3">
-          {/* Classification - only show when there's a classification */}
-          {lastMoveClassification && (
+          {/* Classification - show loading while processing or actual classification */}
+          {(isProcessingMove || lastMoveClassification) && (
             <div className="flex min-h-[112px] items-center rounded-xl border border-slate-200 bg-white p-4 shadow transition-all duration-200">
-              <div
-                className="w-full rounded-xl border-4 bg-white p-3"
-                style={{ borderColor: lastMoveClassification.color }}
-              >
+              {isProcessingMove ? (
+                <div className="w-full space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+                    Analyzing move type...
+                  </div>
+                  <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
+                </div>
+              ) : (
                 <div
-                  className="mb-1 text-lg font-extrabold"
-                  style={{ color: lastMoveClassification.color }}
+                  className="w-full rounded-xl border-4 bg-white p-3"
+                  style={{ borderColor: lastMoveClassification.color }}
                 >
-                  {lastMoveClassification.label}
+                  <div
+                    className="mb-1 text-lg font-extrabold"
+                    style={{ color: lastMoveClassification.color }}
+                  >
+                    {lastMoveClassification.label}
+                  </div>
+                  <div className="text-sm text-slate-600">
+                    Centipawn loss: {lastMoveClassification.cpLoss.toFixed(0)}
+                  </div>
                 </div>
-                <div className="text-sm text-slate-600">
-                  Centipawn loss: {lastMoveClassification.cpLoss.toFixed(0)}
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1344,7 +1364,18 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           {/* Current eval - always visible */}
           <div className="flex min-h-[100px] items-center rounded-xl border border-slate-200 bg-white p-4 shadow transition-all duration-200">
-            {!currentEval ? (
+            {isGameOver ? (
+              <div className="w-full">
+                <div className="mb-1 text-sm font-bold text-slate-700">Game Status</div>
+                <div className={`
+                  text-lg font-extrabold
+                  ${game.isCheckmate() ? 'text-red-700' : 'text-amber-600'}
+                `}>
+                  {game.isCheckmate() && '♔ '}
+                  {gameStatus}
+                </div>
+              </div>
+            ) : !currentEval ? (
               <div className="w-full space-y-2">
                 <div className="h-4 w-24 animate-pulse rounded bg-slate-300" />
                 <div className="h-6 w-32 animate-pulse rounded bg-slate-300" />

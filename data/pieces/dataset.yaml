@@ -25,6 +25,6 @@ names:
 roboflow:
   workspace: chess-board-detector
   project: chess-piece-detector2-ms38l
-  version: 2
+  version: 3
   license: CC BY 4.0
-  url: https://universe.roboflow.com/chess-board-detector/chess-piece-detector2-ms38l/dataset/2
+  url: https://universe.roboflow.com/chess-board-detector/chess-piece-detector2-ms38l/dataset/3

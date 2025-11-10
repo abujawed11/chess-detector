@@ -65,12 +65,27 @@ async function applyMove(fen, uciMove) {
     const to = uciMove.substring(2, 4);
     const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
 
+    // Validate move is legal before attempting
+    const legalMoves = game.moves({ verbose: true });
+    const isLegal = legalMoves.some(m => m.from === from && m.to === to && (!promotion || m.promotion === promotion));
+    
+    if (!isLegal) {
+      // Silently return null for illegal moves - this is expected in PV analysis
+      // when the engine's PV doesn't match the actual position
+      return null;
+    }
+
     const move = game.move({ from, to, promotion });
     if (!move) return null;
 
     return game.fen();
   } catch (e) {
-    console.error('Error applying move:', e);
+    // Only log if unexpected error (not invalid move)
+    console.warn('Unexpected error in applyMove:', {
+      fen,
+      move: uciMove,
+      error: e.message
+    });
     return null;
   }
 }
