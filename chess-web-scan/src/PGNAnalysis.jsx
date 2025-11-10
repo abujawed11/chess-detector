@@ -1077,18 +1077,67 @@ export default function PGNAnalysis() {
 
   const getStats = () => {
     if (analyzedMoves.length === 0) return null;
-    const stats = {
+
+    // Overall stats
+    const overall = {
       brilliant: 0, book: 0, best: 0, excellent: 0, good: 0, miss: 0,
       inaccuracy: 0, mistake: 0, blunder: 0
     };
-    analyzedMoves.forEach((m) => {
-      if (stats.hasOwnProperty(m.classification)) {
-        stats[m.classification] = stats[m.classification] + 1;
+
+    // White stats (even indices: 0, 2, 4, ...)
+    const white = {
+      brilliant: 0, book: 0, best: 0, excellent: 0, good: 0, miss: 0,
+      inaccuracy: 0, mistake: 0, blunder: 0
+    };
+
+    // Black stats (odd indices: 1, 3, 5, ...)
+    const black = {
+      brilliant: 0, book: 0, best: 0, excellent: 0, good: 0, miss: 0,
+      inaccuracy: 0, mistake: 0, blunder: 0
+    };
+
+    analyzedMoves.forEach((m, index) => {
+      if (overall.hasOwnProperty(m.classification)) {
+        overall[m.classification] = overall[m.classification] + 1;
+
+        if (index % 2 === 0) {
+          // White move
+          white[m.classification] = white[m.classification] + 1;
+        } else {
+          // Black move
+          black[m.classification] = black[m.classification] + 1;
+        }
       }
     });
+
+    // Calculate average CP loss
     const totalCpLoss = analyzedMoves.reduce((s, m) => s + (m.cpLoss || 0), 0);
     const avgCpLoss = (totalCpLoss / analyzedMoves.length).toFixed(1);
-    return { ...stats, avgCpLoss };
+
+    // Calculate average CP loss for each player
+    let whiteCpLoss = 0;
+    let whiteCount = 0;
+    let blackCpLoss = 0;
+    let blackCount = 0;
+
+    analyzedMoves.forEach((m, index) => {
+      if (index % 2 === 0) {
+        whiteCpLoss += (m.cpLoss || 0);
+        whiteCount++;
+      } else {
+        blackCpLoss += (m.cpLoss || 0);
+        blackCount++;
+      }
+    });
+
+    const whiteAvgCpLoss = whiteCount > 0 ? (whiteCpLoss / whiteCount).toFixed(1) : '0.0';
+    const blackAvgCpLoss = blackCount > 0 ? (blackCpLoss / blackCount).toFixed(1) : '0.0';
+
+    return {
+      overall: { ...overall, avgCpLoss },
+      white: { ...white, avgCpLoss: whiteAvgCpLoss },
+      black: { ...black, avgCpLoss: blackAvgCpLoss }
+    };
   };
   const stats = getStats();
 
@@ -1236,27 +1285,94 @@ export default function PGNAnalysis() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats - Player-specific */}
       {stats && (
-        <div className="mb-4 rounded-xl border border-blue-200 bg-gradient-to-r from-white to-blue-50 p-6 shadow-md">
-          <h3 className="mb-4 text-lg font-bold text-slate-900">📊 Game Statistics</h3>
-          <div className="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-9">
-            {Object.entries(stats).map(([key, value]) => {
-              if (key === 'avgCpLoss') {
+        <div className="mb-4 space-y-4">
+          {/* White Stats */}
+          <div className="rounded-xl border-2 border-slate-300 bg-gradient-to-r from-white to-slate-50 p-5 shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">
+                ⬜ {gameInfo?.white || 'White'} Statistics
+              </h3>
+              {gameInfo?.whiteElo !== '?' && (
+                <span className="text-sm font-semibold text-slate-600">
+                  ELO: {gameInfo?.whiteElo}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5 lg:grid-cols-10">
+              {Object.entries(stats.white).map(([key, value]) => {
+                if (key === 'avgCpLoss') {
+                  return (
+                    <div key={key} className="rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 p-2.5 text-center shadow-sm">
+                      <div className="text-xl font-bold text-slate-900">{value}</div>
+                      <div className="text-[10px] font-semibold text-slate-600">Avg Loss</div>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={key} className="rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-slate-900">{value}</div>
-                    <div className="text-xs font-semibold text-slate-600">Avg Loss</div>
+                  <div key={key} className="rounded-lg p-2.5 text-center shadow-sm" style={{ backgroundColor: getClassificationColor(key) + '30' }}>
+                    <div className="text-xl font-bold" style={{ color: getClassificationColor(key) }}>{value}</div>
+                    <div className="text-[10px] font-semibold capitalize text-slate-700">{key}</div>
                   </div>
                 );
-              }
-              return (
-                <div key={key} className="rounded-lg p-3 text-center shadow-sm" style={{ backgroundColor: getClassificationColor(key) + '30' }}>
-                  <div className="text-2xl font-bold" style={{ color: getClassificationColor(key) }}>{value}</div>
-                  <div className="text-xs font-semibold capitalize text-slate-700">{key}</div>
-                </div>
-              );
-            })}
+              })}
+            </div>
+          </div>
+
+          {/* Black Stats */}
+          <div className="rounded-xl border-2 border-slate-700 bg-gradient-to-r from-slate-800 to-slate-700 p-5 shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">
+                ⬛ {gameInfo?.black || 'Black'} Statistics
+              </h3>
+              {gameInfo?.blackElo !== '?' && (
+                <span className="text-sm font-semibold text-slate-300">
+                  ELO: {gameInfo?.blackElo}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5 lg:grid-cols-10">
+              {Object.entries(stats.black).map(([key, value]) => {
+                if (key === 'avgCpLoss') {
+                  return (
+                    <div key={key} className="rounded-lg bg-gradient-to-br from-slate-600 to-slate-500 p-2.5 text-center shadow-sm">
+                      <div className="text-xl font-bold text-white">{value}</div>
+                      <div className="text-[10px] font-semibold text-slate-200">Avg Loss</div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={key} className="rounded-lg p-2.5 text-center shadow-sm" style={{ backgroundColor: getClassificationColor(key) + '50' }}>
+                    <div className="text-xl font-bold text-white">{value}</div>
+                    <div className="text-[10px] font-semibold capitalize text-white/90">{key}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Overall Stats (compact) */}
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-bold text-slate-700">📊 Overall Game Statistics</h3>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+              {Object.entries(stats.overall).map(([key, value]) => {
+                if (key === 'avgCpLoss') {
+                  return (
+                    <div key={key} className="rounded-md bg-white/70 p-2 text-center shadow-sm">
+                      <div className="text-lg font-bold text-slate-900">{value}</div>
+                      <div className="text-[9px] font-semibold text-slate-600">Avg Loss</div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={key} className="rounded-md p-2 text-center shadow-sm" style={{ backgroundColor: getClassificationColor(key) + '20' }}>
+                    <div className="text-lg font-bold" style={{ color: getClassificationColor(key) }}>{value}</div>
+                    <div className="text-[9px] font-semibold capitalize text-slate-700">{key}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

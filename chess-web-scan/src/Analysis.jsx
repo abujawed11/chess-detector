@@ -143,8 +143,18 @@ export default function Analysis({ initialFen, onEditPosition }) {
     setHintRequested(false);
     setLastMoveClassification(null);
     setBestMove(null);
+
+    // IMPORTANT: Update the shared game instance to stay in sync
+    try {
+      game.load(newFen);
+    } catch (e) {
+      console.error('Failed to load new FEN into game instance:', e);
+      setIsProcessingMove(false);
+      return;
+    }
+
     setCurrentFen(newFen);
-    
+
     // Track last move for highlighting
     setLastMove({ from: move.from, to: move.to });
 
@@ -200,13 +210,25 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
       const newMove = {
         ...move,
-        evaluation: result.evaluation,
+        evaluation: result?.evaluation || null,
         classification: classification.classification,
         classificationLabel: classification.label,
         cpLoss: classification.cpLoss,
         isBrilliantV2: classification.isBrilliantV2,
         brilliantAnalysis: classification.brilliantAnalysis
       };
+
+      // Debug logging
+      console.log('📝 Storing move:', {
+        from: newMove.from,
+        to: newMove.to,
+        san: newMove.san,
+        promotion: newMove.promotion,
+        piece: newMove.piece,
+        captured: newMove.captured,
+        moveIndex: moves.length
+      });
+
       setMoves(prev => [...prev, newMove]);
       setCurrentMoveIndex(prev => prev + 1);
 
@@ -222,33 +244,81 @@ export default function Analysis({ initialFen, onEditPosition }) {
   }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
 
   const navigateToMove = useCallback((moveIndex) => {
+    // Handle going to start position (moveIndex === -1)
+    if (moveIndex === -1) {
+      game.reset();
+      game.load(startFen);
+      setCurrentFen(startFen);
+      setCurrentMoveIndex(-1);
+      setCurrentEval(null);
+      setLastMoveClassification(null);
+      setLastMove(null);
+      return;
+    }
+
+    // Validate moveIndex
+    if (moveIndex < -1 || moveIndex >= moves.length) {
+      console.warn('Invalid move index:', moveIndex);
+      return;
+    }
+
     try {
       // Create a fresh Chess instance to avoid race conditions
       const tempGame = new Chess(startFen);
       const movesToReplay = moves.slice(0, moveIndex + 1);
 
       // Replay all moves up to the target index
+      let successfulMoves = 0;
+      console.log(`🔄 Replaying ${movesToReplay.length} moves to reach index ${moveIndex}`);
+
       for (let i = 0; i < movesToReplay.length; i++) {
         const m = movesToReplay[i];
-        const result = tempGame.move({ from: m.from, to: m.to, promotion: m.promotion });
 
-        if (!result) {
-          console.error('Failed to replay move:', m, 'at index', i);
-          console.error('Current FEN:', tempGame.fen());
-          // Stop replaying if we hit an invalid move
+        // Validate move object has required properties
+        if (!m || !m.from || !m.to) {
+          console.error(`❌ Invalid move object at index ${i}:`, m);
+          break;
+        }
+
+        console.log(`  ${i + 1}. Replaying: ${m.san || '?'} (${m.from}→${m.to}${m.promotion ? '=' + m.promotion : ''})`);
+
+        try {
+          const result = tempGame.move({
+            from: m.from,
+            to: m.to,
+            promotion: m.promotion || undefined
+          });
+
+          if (!result) {
+            console.error(`❌ Move rejected by chess.js at index ${i}:`);
+            console.error('   Move:', { from: m.from, to: m.to, san: m.san, promotion: m.promotion });
+            console.error('   Current FEN:', tempGame.fen());
+            console.error('   Legal moves:', tempGame.moves({ verbose: true }).map(lm => `${lm.from}→${lm.to}`));
+            break;
+          }
+          successfulMoves++;
+        } catch (moveError) {
+          console.error(`❌ Exception replaying move at index ${i}:`, moveError);
+          console.error('   Move:', m);
+          console.error('   Current FEN:', tempGame.fen());
           break;
         }
       }
 
-      // Update the shared game object and state
-      game.load(tempGame.fen());
-      setCurrentFen(tempGame.fen());
-      setCurrentMoveIndex(moveIndex);
-      setCurrentEval(moveIndex >= 0 ? moves[moveIndex].evaluation : null);
+      console.log(`✅ Successfully replayed ${successfulMoves} of ${movesToReplay.length} moves`);
+
+      // Update to the position we successfully reached
+      const finalFen = tempGame.fen();
+      const finalIndex = successfulMoves - 1;
+
+      game.load(finalFen);
+      setCurrentFen(finalFen);
+      setCurrentMoveIndex(finalIndex);
+      setCurrentEval(finalIndex >= 0 && moves[finalIndex] ? moves[finalIndex].evaluation : null);
 
       // Update classification display to match the current move
-      if (moveIndex >= 0 && moves[moveIndex]) {
-        const currentMove = moves[moveIndex];
+      if (finalIndex >= 0 && moves[finalIndex]) {
+        const currentMove = moves[finalIndex];
         setLastMoveClassification({
           classification: currentMove.classification,
           label: currentMove.classificationLabel,
@@ -265,12 +335,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
       }
     } catch (error) {
       console.error('Error navigating to move:', error);
-      // Fallback: reset to start position
-      game.reset();
-      game.load(startFen);
-      setCurrentFen(startFen);
-      setCurrentMoveIndex(-1);
-      setLastMoveClassification(null);
+      console.error('Failed at moveIndex:', moveIndex);
+      console.error('Moves array length:', moves.length);
+      // DON'T reset the board - just log the error and stay where we are
+      // User can manually reset if needed
+      alert('Navigation error occurred. Check console for details. Board state preserved.');
     }
   }, [game, moves, startFen]);
 
