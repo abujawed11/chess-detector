@@ -31,6 +31,12 @@ const BADGE_STYLES = {
     icon: '✓',
     glow: 'rgba(100, 116, 139, 0.3)'
   },
+  miss: {
+    gradient: 'from-orange-400 to-amber-500',
+    shadow: 'shadow-[0_0_22px_rgba(255,165,0,0.6)]',
+    icon: 'Ø',
+    glow: 'rgba(255, 165, 0, 0.4)'
+  },
   inaccuracy: {
     gradient: 'from-yellow-400 to-amber-500',
     shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.5)]',

@@ -785,6 +785,7 @@ export default function PGNAnalysis() {
       best: '#9bc02a',
       excellent: '#96bc4b',
       good: '#96af8b',
+      miss: '#ffa500', // Orange - missed opportunity
       inaccuracy: '#f0c15c',
       mistake: '#e58f2a',
       blunder: '#fa412d',
@@ -1046,17 +1047,38 @@ export default function PGNAnalysis() {
     return out;
   }, [moves, analyzedMoves]);
 
-  // Auto-scroll current move into view
+  // Auto-scroll current move into view (only within container, don't scroll page)
   useEffect(() => {
-    if (!listContainerRef.current) return;
-    const el = listContainerRef.current.querySelector(`[data-move="${currentMoveIndex}"]`);
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (!listContainerRef.current || currentMoveIndex < 0) return;
+
+    const container = listContainerRef.current;
+    const el = container.querySelector(`[data-move="${currentMoveIndex}"]`);
+
+    if (!el) return;
+
+    // Get positions
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+
+    // Check if element is already visible
+    const isVisible =
+      elRect.top >= containerRect.top &&
+      elRect.bottom <= containerRect.bottom;
+
+    // Only scroll if element is not fully visible
+    if (!isVisible) {
+      const scrollTop = el.offsetTop - container.offsetTop - (container.clientHeight / 2) + (el.clientHeight / 2);
+      container.scrollTo({
+        top: scrollTop,
+        behavior: 'smooth'
+      });
+    }
   }, [currentMoveIndex]);
 
   const getStats = () => {
     if (analyzedMoves.length === 0) return null;
     const stats = {
-      brilliant: 0, book: 0, best: 0, excellent: 0, good: 0,
+      brilliant: 0, book: 0, best: 0, excellent: 0, good: 0, miss: 0,
       inaccuracy: 0, mistake: 0, blunder: 0
     };
     analyzedMoves.forEach((m) => {

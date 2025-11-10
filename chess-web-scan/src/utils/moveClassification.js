@@ -55,11 +55,34 @@ export function classifyMove(cpLoss, options = {}) {
     forced = false,
     missedMate = false,
     isBook = false,
-    isBrilliant = false
+    isBrilliant = false,
+    missedOpportunity = false, // Miss: failed to take advantage of a tactical opportunity
+    slowerMate = null // 'inaccuracy', 'good', or null (for slower mates)
   } = options;
 
-  // Missed mate is always a blunder (highest priority)
-  if (missedMate) {
+  // Slower mate classification takes priority
+  // Playing M5 when M3 is available should be classified as inaccuracy/good
+  if (slowerMate === 'inaccuracy') {
+    return {
+      classification: 'inaccuracy',
+      label: 'Inaccuracy',
+      color: '#f0c15c',
+      cpLoss
+    };
+  }
+
+  if (slowerMate === 'good') {
+    return {
+      classification: 'good',
+      label: 'Good',
+      color: '#96af8b',
+      cpLoss
+    };
+  }
+
+  // Missed mate is a BLUNDER only if it also loses significant advantage
+  // If you miss mate but still maintain position, it's a "Miss" instead
+  if (missedMate && cpLoss >= 200) {
     return {
       classification: 'blunder',
       label: 'Blunder',
@@ -115,6 +138,21 @@ export function classifyMove(cpLoss, options = {}) {
       classification: 'good',
       label: 'Good',
       color: '#96af8b',
+      cpLoss
+    };
+  }
+
+  // Miss (Ø): Missed a tactical opportunity, checkmate, or chance to punish opponent
+  // Chess.com: Move is decent but missed significant advantage or forced mate
+  // Examples:
+  //   - Had M2 (mate in 2) available but played a good developing move
+  //   - Could win a piece with a fork but played a normal continuation
+  //   - Opponent blundered but you didn't punish it
+  if (missedOpportunity) {
+    return {
+      classification: 'miss',
+      label: 'Miss',
+      color: '#ffa500', // Orange color for missed opportunities (Ø symbol)
       cpLoss
     };
   }
@@ -218,9 +256,12 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   );
   const withinEps = ourLine ? (lines[0].scoreForRoot - ourLine.scoreForRoot) <= epsilon : false;
 
-  const missedMate =
-    (lines[0]?.evaluation?.type === 'mate') &&
-    (ourRoot.evaluation?.type !== 'mate');
+  // Detect if best move delivers mate
+  const bestMoveIsMate = lines[0]?.evaluation?.type === 'mate';
+  const ourMoveIsMate = ourRoot.evaluation?.type === 'mate';
+
+  // Missed mate = best move delivers mate but our move doesn't
+  const missedMate = bestMoveIsMate && !ourMoveIsMate;
 
   // Count pieces for brilliant detection and game phase
   const pieceCount = (fen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
@@ -256,13 +297,61 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   // Use V2 if available, otherwise fall back to legacy
   const isBrilliant = isBrilliantV2 || isBrilliantLegacy;
 
+  // Detect slower mate (playing M5 when M3 available)
+  // If both moves deliver mate but ours is slower, classify based on difference
+  let slowerMateClassification = null;
+  if (bestMoveIsMate && ourMoveIsMate) {
+    const bestMateIn = Math.abs(lines[0]?.evaluation?.value || 0);
+    const ourMateIn = Math.abs(ourRoot.evaluation?.value || 0);
+    const mateDiff = ourMateIn - bestMateIn;
+
+    if (mateDiff >= 2) {
+      // 2+ moves slower = Inaccuracy (e.g., M5 when M3 available)
+      slowerMateClassification = 'inaccuracy';
+      console.log(`⏱️ Slower mate detected: Played M${ourMateIn} when M${bestMateIn} available → Inaccuracy`);
+    } else if (mateDiff === 1) {
+      // 1 move slower = Good (e.g., M4 when M3 available)
+      slowerMateClassification = 'good';
+      console.log(`⏱️ Slower mate detected: Played M${ourMateIn} when M${bestMateIn} available → Good`);
+    }
+    // mateDiff === 0 or negative = Best (fastest mate)
+  }
+
+  // Detect missed opportunity (Miss classification)
+  // Case 1: Missed a checkmate (M1, M2, M3, etc.) but played a decent move
+  // Case 2: Missed significant material/positional advantage (200+ CP) but played decent move
+  const missedMateOpportunity =
+    bestMoveIsMate && // Best move delivers mate
+    !ourMoveIsMate && // Our move doesn't deliver mate
+    cpLoss < 200; // But our move isn't a blunder (still maintains decent position)
+
+  const missedMaterialOpportunity =
+    !bestMoveIsMate && // Not about missing mate
+    cpLoss < 100 && // Move isn't terrible
+    bestRootScore >= 200 && // Best move offered significant advantage (2+ pawns)
+    cpLoss >= 50 && // But player missed it (some CP loss)
+    !isBook; // Not in opening theory
+
+  const missedOpportunity = missedMateOpportunity || missedMaterialOpportunity;
+
+  console.log('📊 Miss detection:', {
+    missedMateOpportunity,
+    missedMaterialOpportunity,
+    bestMoveIsMate,
+    ourMoveIsMate,
+    cpLoss,
+    bestRootScore
+  });
+
   const classification = classifyMove(cpLoss, {
     inTop3,
     withinEps,
     forced,
     missedMate,
     isBook: isBook && cpLoss <= 10, // Only mark as book if it's a good move
-    isBrilliant
+    isBrilliant,
+    missedOpportunity,
+    slowerMate: slowerMateClassification // 'inaccuracy', 'good', or null
   });
 
   return {
@@ -272,6 +361,9 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     lines,
     forced,
     missedMate,
+    missedMateOpportunity: missedMateOpportunity || false, // Missed M1/M2/M3 but played decent move
+    bestMoveIsMate, // Best move delivers mate
+    mateInMoves: bestMoveIsMate ? Math.abs(lines[0]?.evaluation?.value || 0) : null,
     isBook: isBook && cpLoss <= 15,
     isBrilliant,
     isBrilliantV2,
@@ -293,6 +385,7 @@ export function getClassificationStats(classifications) {
     best: 0,
     excellent: 0,
     good: 0,
+    miss: 0,
     inaccuracy: 0,
     mistake: 0,
     blunder: 0,

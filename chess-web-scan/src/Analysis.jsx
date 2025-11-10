@@ -22,6 +22,7 @@ function getClassificationColor(classification) {
     best: '#9bc02a',
     excellent: '#96bc4b',
     good: '#96af8b',
+    miss: '#ffa500', // Orange - missed opportunity (Ø)
     inaccuracy: '#f0c15c',
     mistake: '#e58f2a',
     blunder: '#fa412d'
