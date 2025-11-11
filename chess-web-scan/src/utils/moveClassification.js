@@ -4,6 +4,7 @@
  */
 
 import { analyzeBrilliantMove, shouldCheckBrilliant } from './brilliantDetection.js';
+import { analyzeBrilliantV3, shouldCheckBrilliantV3, createAnalysisData } from './brilliantDetectionV3.js';
 import { detectTacticalMotifs, generateMoveExplanation } from './moveExplanation.js';
 
 /**
@@ -267,13 +268,77 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   // Count pieces for brilliant detection and game phase
   const pieceCount = (fen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
 
-  // Enhanced Brilliant Move Detection (V2)
+  // Enhanced Brilliant Move Detection (V3 - Chess.com-style 7-case system)
+  let isBrilliantV3 = false;
+  let brilliantAnalysisV3 = null;
+
+  // Check if we should run V3 brilliant analysis
+  const moveNumber = parseInt(fen.split(' ')[5] || '1');
+
+  // Calculate actual multipv rank
+  let actualMultipvRank = 99;
+  const moveLower = move.toLowerCase();
+  for (let i = 0; i < lines.length; i++) {
+    const pvMove = lines[i]?.pv?.[0]?.toLowerCase();
+    if (pvMove === moveLower || pvMove?.substring(0, 4) === moveLower.substring(0, 4)) {
+      actualMultipvRank = i + 1;
+      break;
+    }
+  }
+
+  console.log(`🔍 V3 Pre-check: cpLoss=${cpLoss.toFixed(1)}, rank=${actualMultipvRank}, moveNum=${moveNumber}, pieces=${pieceCount}`);
+
+  const shouldRunV3 = shouldCheckBrilliantV3(cpLoss, actualMultipvRank, moveNumber, pieceCount);
+  console.log(`   Should run V3? ${shouldRunV3}`);
+
+  if (!skipBrilliant && shouldRunV3) {
+    try {
+      // Detect sacrifice
+      const Chess = (await import('chess.js/dist/esm/chess.js')).Chess;
+      const chessForSac = new Chess(fen);
+      const fromSq = move.substring(0, 2);
+      const toSq = move.substring(2, 4);
+      const movingPiece = chessForSac.get(fromSq);
+      const capturedPiece = chessForSac.get(toSq);
+      const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+      const movedValue = movingPiece ? (pieceValues[movingPiece.type] || 0) : 0;
+      const capturedValue = capturedPiece ? (pieceValues[capturedPiece.type] || 0) : 0;
+      const isSacrifice = movedValue > capturedValue && movedValue >= 3;
+
+      console.log(`   Sacrifice check: moved=${movedValue}, captured=${capturedValue}, isSac=${isSacrifice}`);
+
+      // Create analysis data from what we already computed
+      const analysisData = {
+        evalBefore: bestRootScore,
+        evalAfter: ourRootScore,
+        multipvRank: actualMultipvRank,
+        gapToSecond: pv2Gap,
+        isSacrifice
+      };
+
+      console.log(`   Running V3 analysis...`);
+      brilliantAnalysisV3 = await analyzeBrilliantV3(stockfish, fen, move, analysisData, { depth });
+      isBrilliantV3 = brilliantAnalysisV3.isBrilliantV3;
+
+      if (isBrilliantV3) {
+        console.log(`🌟 BRILLIANT V3 DETECTED: ${brilliantAnalysisV3.reason}`);
+      } else {
+        console.log(`   Not brilliant: ${brilliantAnalysisV3.reason}`);
+      }
+    } catch (error) {
+      console.error('❌ Brilliant V3 analysis failed:', error);
+      isBrilliantV3 = false;
+    }
+  } else {
+    console.log(`   Skipping V3 analysis (skipBrilliant=${skipBrilliant}, shouldRunV3=${shouldRunV3})`);
+  }
+
+  // Enhanced Brilliant Move Detection (V2 - Legacy)
   let isBrilliantV2 = false;
   let brilliantAnalysis = null;
 
-  // Quick pre-check to avoid expensive brilliant analysis
-  // Skip if explicitly requested (for faster batch analysis)
-  if (!skipBrilliant && shouldCheckBrilliant(fen, move, cpLoss, forced)) {
+  // Only run V2 if V3 didn't find brilliant (V3 is more accurate)
+  if (!isBrilliantV3 && !skipBrilliant && shouldCheckBrilliant(fen, move, cpLoss, forced)) {
     try {
       brilliantAnalysis = await analyzeBrilliantMove(stockfish, fen, move, {
         depth,
@@ -281,22 +346,13 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
       });
       isBrilliantV2 = brilliantAnalysis.isBrilliantV2;
     } catch (error) {
-      console.error('Brilliant analysis failed:', error);
+      console.error('Brilliant V2 analysis failed:', error);
       isBrilliantV2 = false;
     }
   }
 
-  // Legacy brilliant detection (fallback for simple cases)
-  const isBrilliantLegacy =
-    forced &&
-    pv2Gap >= 500 &&
-    cpLoss === 0 &&
-    !isBook &&
-    pieceCount >= 20 &&
-    pieceCount <= 30;
-
-  // Use V2 if available, otherwise fall back to legacy
-  const isBrilliant = isBrilliantV2 || isBrilliantLegacy;
+  // Use V3 if found, otherwise fall back to V2
+  const isBrilliant = isBrilliantV3 || isBrilliantV2;
 
   // Detect slower mate (playing M5 when M3 available)
   // If both moves deliver mate but ours is slower, classify based on difference
@@ -373,7 +429,7 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
   const motifs = detectTacticalMotifs(fen, fenAfter, move, {
     cpLoss,
     missedMate: missedMateOpportunity,
-    isBrilliant: isBrilliantV2 || isBrilliantLegacy
+    isBrilliant: isBrilliantV3 || isBrilliantV2
   });
 
   // Get best move in SAN notation
@@ -420,8 +476,8 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     fenAfter,
     missedMate: missedMateOpportunity,
     mateInMoves: bestMoveIsMate ? Math.abs(lines[0]?.evaluation?.value || 0) : null,
-    isBrilliant: isBrilliantV2 || isBrilliantLegacy,
-    brilliantAnalysis
+    isBrilliant: isBrilliantV3 || isBrilliantV2,
+    brilliantAnalysis: brilliantAnalysisV3 || brilliantAnalysis
   });
 
   return {
@@ -439,7 +495,9 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     isBook: isBook && cpLoss <= 15,
     isBrilliant,
     isBrilliantV2,
-    brilliantAnalysis, // Detailed brilliant move analysis (gates, reasons, confidence)
+    isBrilliantV3, // V3 detection (Chess.com-style 7-case system)
+    brilliantAnalysis, // V2 detailed analysis (gates, reasons, confidence)
+    brilliantAnalysisV3, // V3 analysis (case, reason, confidence)
     engineEval: bestRootScore,
     moveEval: ourRootScore,
     motifs, // Tactical motifs detected
