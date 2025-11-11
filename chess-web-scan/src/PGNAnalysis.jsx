@@ -746,6 +746,7 @@ import { Chess } from 'chess.js/dist/esm/chess.js';
 import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
+import MoveExplanationCard from './components/MoveExplanationCard';
 import { analyzeMoveClassification } from './utils/moveClassification';
 import { parsePGN } from './utils/pgnParser';
 
@@ -1488,6 +1489,20 @@ export default function PGNAnalysis() {
               </div>
             </div>
           </div>
+
+          {/* Move Explanation Card (Chess.com Premium Analysis Style) */}
+          {currentMoveIndex >= 0 && analyzedMoves[currentMoveIndex] && analyzedMoves[currentMoveIndex].explanation && (
+            <div className="mt-4">
+              <MoveExplanationCard
+                moveNumber={currentMoveIndex + 1}
+                playerName={currentMoveIndex % 2 === 0 ? (gameInfo?.white || 'White') : (gameInfo?.black || 'Black')}
+                playerMove={analyzedMoves[currentMoveIndex].playerMoveSan || moves[currentMoveIndex]?.san || ''}
+                classification={analyzedMoves[currentMoveIndex].classification}
+                explanation={analyzedMoves[currentMoveIndex].explanation}
+                showDetails={true}
+              />
+            </div>
+          )}
         </div>
 
         {/* Move History (chess.com style) */}

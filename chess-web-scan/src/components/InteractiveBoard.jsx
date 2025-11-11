@@ -63,15 +63,16 @@ const BADGE_STYLES = {
   }
 };
 
-export default function InteractiveBoard({
-  fen,
-  onMove,
-  highlightSquares = [],
-  flipped = false,
-  bestMove = null,
+export default function InteractiveBoard({ 
+  fen, 
+  onMove, 
+  highlightSquares = [], 
+  flipped = false, 
+  bestMove = null, 
   hoverMove = null,
   moveBadge = null, // { square: 'e4', classification: 'brilliant', label: 'Brilliant' }
-  lastMove = null // { from: 'e2', to: 'e4' }
+  lastMove = null, // { from: 'e2', to: 'e4' }
+  tacticalMotifs = [] // Array of { type, square, icon, color }
 }) {
   const [chess] = useState(new Chess(fen));
   const [draggedPiece, setDraggedPiece] = useState(null);
@@ -642,6 +643,65 @@ export default function InteractiveBoard({
     );
   };
 
+  // Render tactical motif indicators (e.g., hanging pieces, threats)
+  const renderTacticalMotifs = () => {
+    if (!tacticalMotifs || tacticalMotifs.length === 0) return null;
+
+    const displayFiles = flipped ? [...FILES].reverse() : FILES;
+    const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
+    const squareSize = 560 / 8;
+
+    return tacticalMotifs.map((motif, idx) => {
+      const file = motif.square[0];
+      const rank = parseInt(motif.square[1]);
+      const fileIdx = displayFiles.indexOf(file);
+      const rankIdx = displayRanks.indexOf(rank);
+
+      const x = (fileIdx + 0.5) * squareSize;
+      const y = rankIdx * squareSize + 10;
+
+      const motifIcons = {
+        'hanging_piece': '🎯',
+        'missed_capture': '🔍',
+        'allowed_mate_threat': '☠️',
+        'missed_mate': '👑',
+        'brilliant_sacrifice': '💎'
+      };
+
+      const motifColors = {
+        'hanging_piece': 'rgb(239, 68, 68)',
+        'missed_capture': 'rgb(251, 146, 60)',
+        'allowed_mate_threat': 'rgb(220, 38, 38)',
+        'missed_mate': 'rgb(234, 179, 8)',
+        'brilliant_sacrifice': 'rgb(16, 185, 129)'
+      };
+
+      return (
+        <div
+          key={idx}
+          className="pointer-events-none absolute"
+          style={{
+            left: x,
+            top: y,
+            transform: 'translate(-50%, 0)',
+            zIndex: 15,
+            animation: 'bounceIn 0.4s ease-out'
+          }}
+        >
+          <div
+            className="rounded-full bg-white/90 p-1.5 shadow-lg backdrop-blur-sm"
+            style={{
+              border: `2px solid ${motifColors[motif.type] || 'rgb(100, 116, 139)'}`,
+              animation: 'pulse 2s infinite'
+            }}
+          >
+            <span className="text-lg">{motifIcons[motif.type] || motif.icon || '⚠️'}</span>
+          </div>
+        </div>
+      );
+    });
+  };
+
   // Render move classification badge (Chess.com style - on square corners)
   const renderMoveBadge = () => {
     console.log('🔍 renderMoveBadge called, moveBadge:', moveBadge);
@@ -750,6 +810,7 @@ export default function InteractiveBoard({
       </div>
       {renderHoverArrow()}
       {renderArrow()}
+      {renderTacticalMotifs()}
       {renderMoveBadge()}
 
       {/* Promotion Dialog */}

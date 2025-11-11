@@ -4,6 +4,7 @@
  */
 
 import { analyzeBrilliantMove, shouldCheckBrilliant } from './brilliantDetection.js';
+import { detectTacticalMotifs, generateMoveExplanation } from './moveExplanation.js';
 
 /**
  * Normalize any engine evaluation to the ROOT side-to-move perspective
@@ -354,9 +355,80 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     slowerMate: slowerMateClassification // 'inaccuracy', 'good', or null
   });
 
+  // Generate position after the move for tactical analysis
+  const chessAfter = new Chess(fen);
+  let fenAfter = fen;
+  try {
+    chessAfter.move({
+      from: move.substring(0, 2),
+      to: move.substring(2, 4),
+      promotion: move.length > 4 ? move[4] : undefined
+    });
+    fenAfter = chessAfter.fen();
+  } catch (e) {
+    console.warn('Could not apply move for explanation analysis:', e);
+  }
+
+  // Detect tactical motifs
+  const motifs = detectTacticalMotifs(fen, fenAfter, move, {
+    cpLoss,
+    missedMate: missedMateOpportunity,
+    isBrilliant: isBrilliantV2 || isBrilliantLegacy
+  });
+
+  // Get best move in SAN notation
+  let bestMoveSan = bestMove;
+  try {
+    const tempChess = new Chess(fen);
+    const moveObj = tempChess.move({
+      from: bestMove.substring(0, 2),
+      to: bestMove.substring(2, 4),
+      promotion: bestMove.length > 4 ? bestMove[4] : undefined
+    });
+    bestMoveSan = moveObj?.san || bestMove;
+  } catch (e) {
+    // Keep UCI notation if SAN conversion fails
+  }
+
+  // Get player move in SAN notation
+  let playerMoveSan = move;
+  try {
+    const tempChess = new Chess(fen);
+    const moveObj = tempChess.move({
+      from: move.substring(0, 2),
+      to: move.substring(2, 4),
+      promotion: move.length > 4 ? move[4] : undefined
+    });
+    playerMoveSan = moveObj?.san || move;
+  } catch (e) {
+    // Keep UCI notation if SAN conversion fails
+  }
+
+  // Generate natural language explanation
+  const explanation = generateMoveExplanation({
+    classification: classification.classification,
+    cpLoss,
+    bestMove,
+    bestMoveSan,
+    playerMove: move,
+    playerMoveSan,
+    evalBefore: { type: 'cp', value: bestRootScore },
+    evalAfter: { type: 'cp', value: ourRootScore },
+    bestLine: lines[0]?.pv || [],
+    motifs,
+    fenBefore: fen,
+    fenAfter,
+    missedMate: missedMateOpportunity,
+    mateInMoves: bestMoveIsMate ? Math.abs(lines[0]?.evaluation?.value || 0) : null,
+    isBrilliant: isBrilliantV2 || isBrilliantLegacy,
+    brilliantAnalysis
+  });
+
   return {
     ...classification,
     bestMove,
+    bestMoveSan,
+    playerMoveSan,
     cpLoss,
     lines,
     forced,
@@ -369,7 +441,9 @@ export async function analyzeMoveClassification(stockfish, fen, move, options = 
     isBrilliantV2,
     brilliantAnalysis, // Detailed brilliant move analysis (gates, reasons, confidence)
     engineEval: bestRootScore,
-    moveEval: ourRootScore
+    moveEval: ourRootScore,
+    motifs, // Tactical motifs detected
+    explanation // Natural language explanation
   };
 }
 

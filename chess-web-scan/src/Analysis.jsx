@@ -8,11 +8,13 @@ import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
 import EngineLines from './components/EngineLines';
+import MoveExplanationCard from './components/MoveExplanationCard';
 import {
   evalForRoot,
   normalizeLines,
   analyzeMoveClassification
 } from './utils/moveClassification';
+import { generateMoveExplanation, detectTacticalMotifs } from './utils/moveExplanation';
 
 // Helper function to get classification color
 function getClassificationColor(classification) {
@@ -191,6 +193,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       }
 
       let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a' };
+      let explanation = null;
 
       if (previousAnalysis?.lines?.length) {
         try {
@@ -203,6 +206,35 @@ export default function Analysis({ initialFen, onEditPosition }) {
             movePlayed,
             { depth: analysisDepth, epsilon: 10 }
           );
+
+          // Generate tactical motifs
+          const motifs = detectTacticalMotifs(
+            previousFen,
+            newFen,
+            movePlayed,
+            {
+              cpLoss: classification.cpLoss || 0,
+              missedMate: previousAnalysis?.evaluation?.type === 'mate' ? previousAnalysis.evaluation.value : null,
+              isBrilliant: classification.isBrilliantV2 || false
+            }
+          );
+
+          // Generate explanation
+          explanation = generateMoveExplanation({
+            classification: classification.classification,
+            cpLoss: classification.cpLoss || 0,
+            bestMove: previousAnalysis.lines[0]?.pv[0],
+            bestMoveSan: previousAnalysis.lines[0]?.san,
+            playerMove: movePlayed,
+            playerMoveSan: move.san,
+            evalBefore: previousAnalysis.evaluation,
+            evalAfter: result?.evaluation,
+            bestLine: previousAnalysis.lines[0]?.pv,
+            motifs,
+            fenBefore: previousFen,
+            fenAfter: newFen
+          });
+
         } catch (e) {
           console.error('Classification error:', e);
         }
@@ -215,7 +247,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
         classificationLabel: classification.label,
         cpLoss: classification.cpLoss,
         isBrilliantV2: classification.isBrilliantV2,
-        brilliantAnalysis: classification.brilliantAnalysis
+        brilliantAnalysis: classification.brilliantAnalysis,
+        explanation: explanation
       };
 
       // Debug logging
@@ -226,10 +259,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
         promotion: newMove.promotion,
         piece: newMove.piece,
         captured: newMove.captured,
-        moveIndex: moves.length
+        moveIndex: moves.length,
+        currentMoveIndex
       });
 
-      setMoves(prev => [...prev, newMove]);
+      // IMPORTANT: When adding a new move, clear all moves after current position
+      // This handles the case where user goes back and plays a different variation
+      setMoves(prev => {
+        const movesUpToCurrent = prev.slice(0, currentMoveIndex + 1);
+        return [...movesUpToCurrent, newMove];
+      });
       setCurrentMoveIndex(prev => prev + 1);
 
       // Set the classification to display in the UI
@@ -581,6 +620,20 @@ export default function Analysis({ initialFen, onEditPosition }) {
               ⏭
             </button>
           </div>
+
+          {/* Move Explanation Card - appears below navigation */}
+          {currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
+            <div className="mt-4">
+              <MoveExplanationCard
+                moveNumber={currentMoveIndex + 1}
+                playerName={currentMoveIndex % 2 === 0 ? 'White' : 'Black'}
+                playerMove={moves[currentMoveIndex].san}
+                classification={moves[currentMoveIndex].classification}
+                explanation={moves[currentMoveIndex].explanation}
+                showDetails={true}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right panel (sticky) */}
