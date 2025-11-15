@@ -51,7 +51,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
   const [lastMoveClassification, setLastMoveClassification] = useState(null);
   const [lastMove, setLastMove] = useState(null); // { from: 'e2', to: 'e4' }
-  const [analysisDepth, setAnalysisDepth] = useState(15);
+  const [analysisDepth, setAnalysisDepth] = useState(22);
   const [storedAnalysis, setStoredAnalysis] = useState(null);
   const [engineLines, setEngineLines] = useState([]);
   const [isProcessingMove, setIsProcessingMove] = useState(false);

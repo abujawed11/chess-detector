@@ -247,3 +247,5 @@ models/backups/*.zip
 # Ignore large pretrained weights
 yolov8*.pt
 yolo11*.pt
+
+engine

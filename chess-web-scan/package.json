@@ -14,8 +14,6 @@
     "chess.js": "^1.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "stockfish": "^17.1.0",
-    "stockfish.js": "^10.0.2",
     "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
