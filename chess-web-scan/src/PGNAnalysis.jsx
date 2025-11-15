@@ -3,7 +3,8 @@
 // import { useStockfish } from './hooks/useStockfish';
 // import InteractiveBoard from './components/InteractiveBoard';
 // import EvaluationBar from './components/EvaluationBar';
-// import { analyzeMoveClassification } from './utils/moveClassification';
+// // REMOVED: Old classification imports (now using backend)
+// import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 // import { parsePGN } from './utils/pgnParser';
 
 // /**
@@ -747,7 +748,8 @@ import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveExplanationCard from './components/MoveExplanationCard';
-import { analyzeMoveClassification } from './utils/moveClassification';
+// REMOVED: Old classification imports (now using backend)
+import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 import { parsePGN } from './utils/pgnParser';
 
 /**
@@ -859,26 +861,23 @@ export default function PGNAnalysis() {
         const uciMove = move.from + move.to + (move.promotion || '');
 
         try {
-          const classification = await analyzeMoveClassification(
-            { analyze },
-            fen,
-            uciMove,
-            { depth: 12, epsilon: 10, skipBrilliant: false }
-          );
+          // Use backend evaluation service
+          const evaluation = await evaluateMove(fen, uciMove, 12, 5);
+          const badge = getMoveBadge(evaluation);
 
           analyzed.push({
             ...move,
-            classification: classification.classification,
-            classificationLabel: classification.label,
-            color: classification.color,
-            cpLoss: classification.cpLoss,
-            evaluation: classification.engineEval,
-            isBrilliant: classification.isBrilliant,
-            isBrilliantV2: classification.isBrilliantV2,
-            brilliantAnalysis: classification.brilliantAnalysis
+            classification: evaluation.label.toLowerCase(),
+            classificationLabel: evaluation.label,
+            color: badge.color,
+            cpLoss: evaluation.cpl || 0,
+            evaluation: evaluation.evalAfter,
+            isBrilliant: evaluation.label === 'Brilliant',
+            isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
+            brilliantAnalysis: evaluation.brilliantInfo || null
           });
         } catch (err) {
-          console.error(`Failed to analyze move ${i + 1}`, err);
+          console.error(`❌ Failed to analyze move ${i + 1}`, err);
           analyzed.push({
             ...move,
             classification: 'unknown',

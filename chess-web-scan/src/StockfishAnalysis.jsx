@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
-import { analyzeMoveClassification, getClassificationStats, calculateAverageCPLoss } from './utils/moveClassification';
+// REMOVED: Old classification imports (now using backend)
+import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 
 /**
  * Comprehensive Stockfish Analysis Page
@@ -84,12 +85,21 @@ export default function StockfishAnalysis() {
     setProgress('Analyzing position...');
 
     try {
-      const result = await analyzeMoveClassification(
-        { analyze },
-        position.fen,
-        position.testMove,
-        { depth: 20, epsilon: 10 }
-      );
+      // Use backend evaluation service
+      const evaluation = await evaluateMove(position.fen, position.testMove, 20, 5);
+      const badge = getMoveBadge(evaluation);
+
+      const result = {
+        classification: evaluation.label.toLowerCase(),
+        label: evaluation.label,
+        cpLoss: evaluation.cpl || 0,
+        color: badge.color,
+        bestMove: evaluation.bestMove || 'N/A',
+        isBook: evaluation.isBook,
+        isBrilliant: evaluation.label === 'Brilliant',
+        forced: evaluation.multipvRank === 1,
+        missedMate: evaluation.missDetected
+      };
 
       const resultWithMeta = {
         ...result,
@@ -108,7 +118,7 @@ export default function StockfishAnalysis() {
       }));
 
     } catch (error) {
-      console.error('Analysis error:', error);
+      console.error('❌ Backend evaluation error:', error);
       alert('Analysis failed: ' + error.message);
     } finally {
       setAnalyzing(false);
@@ -132,12 +142,21 @@ export default function StockfishAnalysis() {
 
       const pos = category.positions[i];
       try {
-        const result = await analyzeMoveClassification(
-          { analyze },
-          pos.fen,
-          pos.testMove,
-          { depth: 20, epsilon: 10 }
-        );
+        // Use backend evaluation service
+        const evaluation = await evaluateMove(pos.fen, pos.testMove, 20, 5);
+        const badge = getMoveBadge(evaluation);
+
+        const result = {
+          classification: evaluation.label.toLowerCase(),
+          label: evaluation.label,
+          cpLoss: evaluation.cpl || 0,
+          color: badge.color,
+          bestMove: evaluation.bestMove || 'N/A',
+          isBook: evaluation.isBook,
+          isBrilliant: evaluation.label === 'Brilliant',
+          forced: evaluation.multipvRank === 1,
+          missedMate: evaluation.missDetected
+        };
 
         const resultWithMeta = {
           ...result,
@@ -155,7 +174,7 @@ export default function StockfishAnalysis() {
         setCurrentResult(resultWithMeta);
 
       } catch (error) {
-        console.error(`Error analyzing position ${i}:`, error);
+        console.error(`❌ Error analyzing position ${i}:`, error);
       }
 
       await new Promise(r => setTimeout(r, 300));
@@ -189,12 +208,21 @@ export default function StockfishAnalysis() {
 
         const pos = cat.positions[posIdx];
         try {
-          const result = await analyzeMoveClassification(
-            { analyze },
-            pos.fen,
-            pos.testMove,
-            { depth: 20, epsilon: 10 }
-          );
+          // Use backend evaluation service
+          const evaluation = await evaluateMove(pos.fen, pos.testMove, 20, 5);
+          const badge = getMoveBadge(evaluation);
+
+          const result = {
+            classification: evaluation.label.toLowerCase(),
+            label: evaluation.label,
+            cpLoss: evaluation.cpl || 0,
+            color: badge.color,
+            bestMove: evaluation.bestMove || 'N/A',
+            isBook: evaluation.isBook,
+            isBrilliant: evaluation.label === 'Brilliant',
+            forced: evaluation.multipvRank === 1,
+            missedMate: evaluation.missDetected
+          };
 
           const resultWithMeta = {
             ...result,
@@ -212,7 +240,7 @@ export default function StockfishAnalysis() {
           setCurrentResult(resultWithMeta);
 
         } catch (error) {
-          console.error(`Error analyzing ${cat.category} - ${pos.name}:`, error);
+          console.error(`❌ Error analyzing ${cat.category} - ${pos.name}:`, error);
         }
 
         await new Promise(r => setTimeout(r, 300));
@@ -228,8 +256,22 @@ export default function StockfishAnalysis() {
   const correct = allResults.filter(r => r.match).length;
   const total = allResults.length;
   const accuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0;
-  const avgCPLoss = total > 0 ? calculateAverageCPLoss(allResults).toFixed(0) : 0;
-  const stats = total > 0 ? getClassificationStats(allResults) : null;
+
+  // Calculate average CP loss
+  const avgCPLoss = total > 0
+    ? (allResults.reduce((sum, r) => sum + (r.cpLoss || 0), 0) / total).toFixed(0)
+    : 0;
+
+  // Calculate classification stats
+  const stats = total > 0 ? {
+    best: allResults.filter(r => r.classification === 'best').length,
+    good: allResults.filter(r => r.classification === 'good').length,
+    book: allResults.filter(r => r.classification === 'book').length,
+    brilliant: allResults.filter(r => r.classification === 'brilliant').length,
+    inaccuracy: allResults.filter(r => r.classification === 'inaccuracy').length,
+    mistake: allResults.filter(r => r.classification === 'mistake').length,
+    blunder: allResults.filter(r => r.classification === 'blunder').length
+  } : null;
 
   return (
     <div style={{ padding: 20, maxWidth: 1800, margin: '0 auto' }}>

@@ -29,6 +29,17 @@ from utils.chess_helpers import (
     ENGINE_PATH,
 )
 
+# Import move classification logic
+from basic_move_labels import (
+    classify_basic_move,
+    detect_miss,
+    detect_book_move,
+    classify_exclam_move,
+    is_real_sacrifice,
+)
+
+from opening_book import is_book_move
+
 BOARD_MODEL_PATH = os.getenv("BOARD_MODEL_PATH")
 PIECES_MODEL_PATH = os.getenv("PIECES_MODEL_PATH")
 BOARD_CONF = float(os.getenv("BOARD_CONF", 0.25))
@@ -116,7 +127,7 @@ async def start_engine_endpoint():
 
         logger.info("Starting persistent Stockfish engine...")
         hash_mb = 512
-        threads = 2
+        threads = 4
         persistent_engine = start_engine({"Hash": hash_mb, "Threads": threads})
         logger.info(f"Stockfish engine started (Hash={hash_mb}MB, Threads={threads})")
 
@@ -225,4 +236,338 @@ async def analyze_position(
         return JSONResponse({
             "error": "ANALYSIS_FAILED",
             "message": str(e)
+        }, status_code=500)
+
+
+# Material values for evaluation
+PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 300,
+    chess.BISHOP: 300,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 0,
+}
+
+MATE_CP   = 32000
+MATE_STEP = 1000
+
+
+def eval_for_white(score: dict, side_to_move: str) -> int:
+    """
+    Convert a Stockfish score dict + side_to_move into a centipawn eval
+    from White's perspective ONLY.
+    +ve => good for White, -ve => good for Black
+    """
+    if not score:
+        return 0
+
+    t = score.get("type")
+    v = score.get("value", 0)
+
+    if t == "cp":
+        try:
+            v = int(v)
+        except Exception:
+            v = 0
+        return v if side_to_move == "w" else -v
+
+    if t == "mate":
+        try:
+            v = int(v)
+        except Exception:
+            v = 0
+
+        sign_for_white = 1 if side_to_move == "w" else -1
+        white_mate_val = v * sign_for_white
+
+        if white_mate_val == 0:
+            return 0
+
+        n = abs(white_mate_val)
+        base = max(0, MATE_CP - MATE_STEP * n)
+        return base if white_mate_val > 0 else -base
+
+    try:
+        return int(v)
+    except Exception:
+        return 0
+
+
+def played_rank_and_gap(uci_move, pvs, side_to_move: str):
+    """
+    Return (rank, top_gap_cp, played_eval_cp, best_eval_cp)
+    """
+    if not pvs:
+        return (1, None, None, None)
+
+    uci_move_normalized = uci_move.lower().strip().replace("=", "")
+    K = len(pvs)
+
+    best_eval_cp = eval_for_white(pvs[0]["score"], side_to_move)
+
+    for pv_entry in pvs:
+        pv = pv_entry.get("pv", [])
+        if not pv:
+            continue
+
+        pv_move = pv[0].lower().strip().replace("=", "")
+
+        is_match = False
+        if pv_move == uci_move_normalized:
+            is_match = True
+        elif len(pv_move) >= 4 and len(uci_move_normalized) >= 4 and pv_move[:4] == uci_move_normalized[:4]:
+            if len(pv_move) == len(uci_move_normalized):
+                if len(pv_move) == 4:
+                    is_match = True
+                elif len(pv_move) == 5 and pv_move[4] == uci_move_normalized[4]:
+                    is_match = True
+            else:
+                is_match = True
+
+        if is_match:
+            rank = pv_entry["multipv"]
+            played_eval_cp = eval_for_white(pv_entry["score"], side_to_move)
+            top_gap = abs(best_eval_cp - played_eval_cp)
+            logger.info(f"Move '{uci_move_normalized}' found at rank {rank}, gap={top_gap:.1f}cp")
+            return (rank, top_gap, played_eval_cp, best_eval_cp)
+
+    logger.warning(f"Move '{uci_move_normalized}' not found in any PV")
+    return (K + 1, None, None, best_eval_cp)
+
+
+def analyze_or_fail(fen: str, depth: int, multipv: int, engine):
+    """Return PV list or raise with a clear message after retries"""
+    tries = [
+        (depth, multipv),
+        (max(8, depth - 4), multipv),
+        (max(6, depth - 6), 1),
+    ]
+    last_err = None
+    for d, k in tries:
+        try:
+            if engine is not None:
+                pvs = analyze_fen_multipv_persistent(fen, engine, depth=d, multipv=k)
+            else:
+                pvs = analyze_fen_multipv(fen, depth=d, multipv=k)
+            if pvs:
+                return pvs
+        except Exception as e:
+            last_err = e
+    raise RuntimeError(f"No PVs returned for fen='{fen[:60]}...'. Last error: {last_err}")
+
+
+@app.post("/evaluate")
+async def evaluate_move(
+    fen: str = Form(...),
+    move: str = Form(...),
+    depth: int = Form(18),
+    multipv: int = Form(5)
+):
+    """
+    Evaluate a move and classify it (Best/Good/Inaccuracy/Mistake/Blunder/Brilliant/Great/Miss/Book)
+
+    Args:
+        fen: FEN string of position BEFORE the move
+        move: UCI move string (e.g., "e2e4")
+        depth: Search depth (default: 18)
+        multipv: Number of principal variations (default: 5)
+
+    Returns:
+        Complete move evaluation with classification
+    """
+    def mate_ply(score_dict):
+        if not score_dict:
+            return None
+        if score_dict.get("type") == "mate":
+            try:
+                return abs(int(score_dict.get("value", 0)))
+            except Exception:
+                return None
+        return None
+
+    global persistent_engine
+
+    logger.info(f"Evaluating move: {move} for FEN: {fen[:60]}...")
+
+    try:
+        board_before = chess.Board(fen)
+        fen_before = fen
+        side_before = "w" if board_before.turn == chess.WHITE else "b"
+        fullmove_number = board_before.fullmove_number
+
+        # PRE analysis (multi-PV)
+        pre = analyze_or_fail(fen_before, depth, multipv, persistent_engine)
+        pre_score = pre[0]["score"]
+        eval_before_cp = eval_for_white(pre_score, side_before)
+
+        multipv_rank, top_gap, played_eval_from_pre, best_eval_from_pre = played_rank_and_gap(
+            move, pre, side_before
+        )
+
+        # POST analysis (single PV)
+        board_after = board_before.copy()
+        board_after.push_uci(move)
+        post_fen = board_after.fen()
+
+        # Check if game over
+        if board_after.is_checkmate():
+            post_score = {"type": "mate", "value": -1}
+            logger.info(f"Position after move is CHECKMATE")
+        elif board_after.is_stalemate():
+            post_score = {"type": "cp", "value": 0}
+            logger.info(f"Position after move is STALEMATE")
+        elif board_after.is_game_over():
+            post_score = {"type": "cp", "value": 0}
+            logger.info(f"Position after move is GAME OVER (draw)")
+        else:
+            post = analyze_or_fail(post_fen, depth, 1, persistent_engine)
+            post_score = post[0]["score"]
+
+        side_after = "w" if board_after.turn == chess.WHITE else "b"
+        eval_after_cp = eval_for_white(post_score, side_after)
+
+        logger.info(f"[EVAL] pre={eval_before_cp:+} post={eval_after_cp:+} (Δ {eval_after_cp - eval_before_cp:+})")
+
+        # CPL calculation
+        if played_eval_from_pre is None:
+            played_eval_from_pre = eval_after_cp
+
+        cpl = abs(best_eval_from_pre - played_eval_from_pre) if best_eval_from_pre is not None else None
+
+        if top_gap is None:
+            top_gap = cpl
+
+        eval_change = eval_after_cp - eval_before_cp
+
+        # Basic label
+        basic_label = classify_basic_move(
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            cpl=cpl,
+            mover_color=side_before,
+            multipv_rank=multipv_rank,
+        )
+
+        print("Basic label:", basic_label)
+
+        # Sacrifice detection
+        uci_move_obj = chess.Move.from_uci(move)
+        eval_types_dict = {
+            "before": pre_score.get("type") if pre_score else None,
+            "after": post_score.get("type") if post_score else None,
+        }
+
+        is_sacrifice = is_real_sacrifice(
+            board_before=board_before,
+            move=uci_move_obj,
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            mover_color=side_before,
+            eval_types=eval_types_dict,
+        )
+
+        print("SAC DEBUG:", {
+            "is_sacrifice": is_sacrifice,
+            "eval_before": eval_before_cp,
+            "eval_after": eval_after_cp,
+        })
+
+        # Mate metadata
+        best_mate_in = mate_ply(pre_score)
+        played_mate_in = mate_ply(post_score)
+
+        pre_is_mate = pre_score.get("type") == "mate"
+        post_is_mate = post_score.get("type") == "mate"
+
+        mate_flip = bool(pre_is_mate and post_is_mate and (eval_before_cp * eval_after_cp < 0))
+        mate_flip_severity = 0
+        if mate_flip:
+            mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
+
+        # Miss detection
+        is_miss = detect_miss(
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            eval_best_white=best_eval_from_pre,
+            mover_color=side_before,
+            best_mate_in_plies=best_mate_in,
+            played_mate_in_plies=played_mate_in,
+        )
+
+        print("Miss detected:", is_miss)
+
+        # Book detection
+        in_opening_db = is_book_move(fen_before, move)
+        is_book = detect_book_move(
+            fullmove_number=fullmove_number,
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            cpl=cpl,
+            multipv_rank=multipv_rank,
+            in_opening_db=in_opening_db,
+        )
+
+        print("is_book:", is_book)
+        print("in_opening_db:", in_opening_db)
+
+        # Brilliant/Great detection
+        exclam_label, brill_info = classify_exclam_move(
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            eval_best_white=best_eval_from_pre,
+            mover_color=side_before,
+            is_sacrifice=is_sacrifice,
+            is_book=is_book,
+            multipv_rank=multipv_rank,
+            played_eval_from_pre_white=played_eval_from_pre,
+            best_mate_in_plies_pre=best_mate_in,
+            played_mate_in_plies_post=played_mate_in,
+            mate_flip=mate_flip,
+        )
+
+        # Final label priority
+        if in_opening_db:
+            label = "Book"
+        elif exclam_label == "Blunder":
+            label = "Blunder"
+        elif exclam_label in ("Brilliant", "Great"):
+            label = exclam_label
+        elif is_miss:
+            label = "Miss"
+        else:
+            label = basic_label
+
+        print("Final Label:", label)
+
+        return JSONResponse({
+            "fen_before": fen_before,
+            "move": move,
+            "eval_before": eval_before_cp,
+            "eval_after": eval_after_cp,
+            "eval_change": eval_change,
+            "multipv_rank": multipv_rank,
+            "top_gap": top_gap,
+            "cpl": cpl,
+            "eval_before_struct": pre_score,
+            "eval_after_struct": post_score,
+            "is_sacrifice": is_sacrifice,
+            "best_mate_in": best_mate_in,
+            "played_mate_in": played_mate_in,
+            "mate_flip": mate_flip,
+            "mate_flip_severity": mate_flip_severity,
+            "basic_label": basic_label,
+            "miss_detected": is_miss,
+            "is_book": is_book,
+            "in_opening_db": in_opening_db,
+            "exclam_label": exclam_label,
+            "brilliancy_info": brill_info.__dict__ if brill_info else None,
+            "label": label,
+        })
+
+    except Exception as e:
+        logger.error(f"Error in /evaluate: {str(e)}", exc_info=True)
+        return JSONResponse({
+            "error": "EVALUATION_FAILED",
+            "message": str(e),
         }, status_code=500)

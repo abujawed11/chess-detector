@@ -9,12 +9,9 @@ import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
 import EngineLines from './components/EngineLines';
 import MoveExplanationCard from './components/MoveExplanationCard';
-import {
-  evalForRoot,
-  normalizeLines,
-  analyzeMoveClassification
-} from './utils/moveClassification';
-import { generateMoveExplanation, detectTacticalMotifs } from './utils/moveExplanation';
+// REMOVED: Old classification imports (now using backend)
+// Backend handles all classification via /evaluate endpoint
+import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 
 // Helper function to get classification color
 function getClassificationColor(classification) {
@@ -192,51 +189,48 @@ export default function Analysis({ initialFen, onEditPosition }) {
         setStoredAnalysis(null);
       }
 
-      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a' };
+      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a', isBrilliantV2: false };
       let explanation = null;
 
       if (previousAnalysis?.lines?.length) {
         try {
           const movePlayed = move.from + move.to + (move.promotion || '');
 
-          // Use the comprehensive classification system with brilliant detection
-          classification = await analyzeMoveClassification(
-            { analyze }, // Pass stockfish service with analyze method
-            previousFen,
-            movePlayed,
-            { depth: analysisDepth, epsilon: 10 }
-          );
+          // Use backend evaluation service for move classification
+          console.log('🔍 Calling backend /evaluate for move:', movePlayed);
+          const evaluation = await evaluateMove(previousFen, movePlayed, analysisDepth, 5);
 
-          // Generate tactical motifs
-          const motifs = detectTacticalMotifs(
-            previousFen,
-            newFen,
-            movePlayed,
-            {
-              cpLoss: classification.cpLoss || 0,
-              missedMate: previousAnalysis?.evaluation?.type === 'mate' ? previousAnalysis.evaluation.value : null,
-              isBrilliant: classification.isBrilliantV2 || false
-            }
-          );
+          console.log('✅ Backend evaluation result:', evaluation);
 
-          // Generate explanation
-          explanation = generateMoveExplanation({
-            classification: classification.classification,
-            cpLoss: classification.cpLoss || 0,
-            bestMove: previousAnalysis.lines[0]?.pv[0],
-            bestMoveSan: previousAnalysis.lines[0]?.san,
-            playerMove: movePlayed,
-            playerMoveSan: move.san,
-            evalBefore: previousAnalysis.evaluation,
-            evalAfter: result?.evaluation,
-            bestLine: previousAnalysis.lines[0]?.pv,
-            motifs,
-            fenBefore: previousFen,
-            fenAfter: newFen
-          });
+          // Get badge info (label, color, symbol)
+          const badge = getMoveBadge(evaluation);
+
+          // Get explanation text
+          explanation = getMoveExplanation(evaluation);
+
+          // Build classification object compatible with UI
+          classification = {
+            classification: evaluation.label.toLowerCase(),
+            label: evaluation.label,
+            cpLoss: evaluation.cpl || 0,
+            color: badge.color,
+            isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
+            brilliantAnalysis: evaluation.brilliantInfo || null
+          };
+
+          console.log('📊 Classification applied:', classification);
 
         } catch (e) {
-          console.error('Classification error:', e);
+          console.error('❌ Backend evaluation error:', e);
+          // Fallback to basic classification
+          classification = {
+            classification: 'good',
+            label: 'Good',
+            cpLoss: 0,
+            color: '#96af8b',
+            isBrilliantV2: false
+          };
+          explanation = 'Move classification unavailable - backend error';
         }
       }
 

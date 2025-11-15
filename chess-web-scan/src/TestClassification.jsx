@@ -728,7 +728,8 @@ import { useState, useEffect } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
-import { evalForRoot, normalizeLines, classifyMove, isOpeningPhase } from './utils/moveClassification';
+// REMOVED: Old classification imports (now using backend)
+import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 
 /* ---------- Test positions (same spirit as yours) ---------- */
 const TEST_POSITIONS = [
@@ -768,80 +769,21 @@ export default function TestClassification() {
 
     setAnalyzing(true);
     try {
-      const depth = 20; // bump to 22 for endgames if you want
-      const rootChess = new Chess(position.fen);
-      const rootTurn = rootChess.turn();
+      const depth = 20;
 
-      // Check if this is an opening position (book move detection)
-      const isBook = isOpeningPhase(position.fen);
+      // Use backend evaluation service (replaces all manual analysis)
+      setAnalysisStatus('Calling backend /evaluate...');
+      const evaluation = await evaluateMove(position.fen, position.testMove, depth, 5);
 
-      // 1) Root MultiPV (no pushes)
-      setAnalysisStatus('Analyzing root...');
-      const root = await analyze(position.fen, { depth, multiPV: 3 });
-      const lines = normalizeLines(root.lines, rootTurn);
-      const bestMove = lines[0]?.pv?.[0];
+      console.log('📊 Backend evaluation:', evaluation);
+
+      const bestMove = evaluation.bestMove || 'N/A';
       setRootBest(bestMove);
 
-      // diagnostics
-      const pv2Gap = lines.length > 1 ? (lines[0].scoreForRoot - lines[1].scoreForRoot) : 0;
-      const forced = pv2Gap >= 200;
-
-      // 2) Score OUR move at the root using searchmoves
-      setAnalysisStatus(`Scoring ${position.testMove} from root...`);
-      const ourRoot = await analyze(position.fen, {
-        depth,
-        multiPV: 1,
-        searchMoves: [position.testMove],
-      });
-      const ourRootScore = evalForRoot(rootTurn, rootTurn, ourRoot.evaluation);
-
-      // 3) Score BEST move at the root using searchmoves
-      setAnalysisStatus(`Scoring ${bestMove} from root...`);
-      const bestRoot = await analyze(position.fen, {
-        depth,
-        multiPV: 1,
-        searchMoves: [bestMove],
-      });
-      const bestRootScore = evalForRoot(rootTurn, rootTurn, bestRoot.evaluation);
-
-      // 4) Final CP-loss from root perspective
-      const cpLoss = Math.max(0, bestRootScore - ourRootScore);
-
-      // Top-N / epsilon rules (tightened epsilon to 10)
-      const eps = 10;
-      const inTop3 = lines.slice(0, 3).some(
-        l => l.pv[0]?.toLowerCase() === position.testMove.toLowerCase()
-      );
-      const ourLine = lines.find(
-        l => l.pv[0]?.toLowerCase() === position.testMove.toLowerCase()
-      );
-      const withinEps = ourLine ? (lines[0].scoreForRoot - ourLine.scoreForRoot) <= eps : false;
-
-      const missedMate =
-        (lines[0]?.evaluation?.type === 'mate') &&
-        (ourRoot.evaluation?.type !== 'mate');
-
-      // Count pieces for brilliant detection and game phase
-      const pieceCount = (position.fen.split(' ')[0].match(/[pnbrqkPNBRQK]/g) || []).length;
-
-      // Brilliant move detection: ONLY move in a critical position (extremely forced)
-      // Requires: very large gap to 2nd move (500+), best move, and not opening/endgame
-      const isBrilliant =
-        forced &&
-        pv2Gap >= 500 &&
-        cpLoss === 0 &&
-        !isBook &&
-        pieceCount >= 20 &&
-        pieceCount <= 30;
-
-      const result = classifyMove(cpLoss, {
-        inTop3,
-        withinEps,
-        forced,
-        missedMate,
-        isBook: isBook && cpLoss <= 10, // Only mark as book if good move
-        isBrilliant
-      });
+      const result = {
+        classification: evaluation.label.toLowerCase(),
+        label: evaluation.label
+      };
 
       setResults(prev => {
         const copy = [...prev];
@@ -851,16 +793,17 @@ export default function TestClassification() {
           bestMove,
           expected: position.expected,
           actual: result.classification,
-          cpLoss,
+          cpLoss: evaluation.cpl || 0,
           match:
             position.expected === result.classification ||
             (position.expected === 'excellent' && result.classification === 'best') ||
-            (position.expected === 'best' && result.classification === 'excellent'),
+            (position.expected === 'best' && result.classification === 'excellent') ||
+            (position.expected === 'best' && result.classification === 'good'),
         };
         return copy;
       });
     } catch (e) {
-      console.error(e);
+      console.error('❌ Backend evaluation error:', e);
       alert(e.message);
     } finally {
       setAnalyzing(false);

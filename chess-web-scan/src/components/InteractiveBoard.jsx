@@ -704,10 +704,10 @@ export default function InteractiveBoard({
 
   // Render move classification badge (Chess.com style - on square corners)
   const renderMoveBadge = () => {
-    console.log('🔍 renderMoveBadge called, moveBadge:', moveBadge);
+    // console.log('🔍 renderMoveBadge called, moveBadge:', moveBadge);
     
     if (!moveBadge || !moveBadge.square || !moveBadge.classification) {
-      console.log('❌ Badge not rendered - missing data');
+      // console.log('❌ Badge not rendered - missing data');
       return null;
     }
 
