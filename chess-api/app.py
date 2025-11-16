@@ -36,10 +36,20 @@ from basic_move_labels import (
     detect_miss,
     detect_book_move,
     classify_exclam_move,
-    is_real_sacrifice,
+    detect_sacrifice,
+    detect_sac_brilliancy,
 )
 
 from opening_book import is_book_move
+# from basic_move_labels import (
+#     classify_basic_move,
+#     detect_miss,
+#     detect_book_move,
+#     classify_exclam_move,
+#     is_real_sacrifice,
+# )
+
+# from opening_book import is_book_move
 
 BOARD_MODEL_PATH = os.getenv("BOARD_MODEL_PATH")
 PIECES_MODEL_PATH = os.getenv("PIECES_MODEL_PATH")
@@ -581,29 +591,12 @@ async def evaluate_move(
 
         print("Basic label:", basic_label)
 
-        # Sacrifice detection
+        # --- Sacrifice detection (returns full SacrificeResult) ---
         uci_move_obj = chess.Move.from_uci(move)
-        eval_types_dict = {
-            "before": pre_score.get("type") if pre_score else None,
-            "after": post_score.get("type") if post_score else None,
-        }
+        sac_result = detect_sacrifice(board_before, uci_move_obj)
+        is_sacrifice = sac_result.is_real_sacrifice
 
-        is_sacrifice = is_real_sacrifice(
-            board_before=board_before,
-            move=uci_move_obj,
-            eval_before_white=eval_before_cp,
-            eval_after_white=eval_after_cp,
-            mover_color=side_before,
-            eval_types=eval_types_dict,
-        )
-
-        print("SAC DEBUG:", {
-            "is_sacrifice": is_sacrifice,
-            "eval_before": eval_before_cp,
-            "eval_after": eval_after_cp,
-        })
-
-        # Mate metadata
+        # --- Mate metadata ---
         best_mate_in = mate_ply(pre_score)
         played_mate_in = mate_ply(post_score)
 
@@ -615,7 +608,7 @@ async def evaluate_move(
         if mate_flip:
             mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
 
-        # Miss detection
+        # --- General Miss detection ---
         is_miss = detect_miss(
             eval_before_white=eval_before_cp,
             eval_after_white=eval_after_cp,
@@ -627,8 +620,8 @@ async def evaluate_move(
 
         print("Miss detected:", is_miss)
 
-        # Book detection
-        in_opening_db = is_book_move(fen_before, move)
+        # --- Book detection (custom opening DB) ---
+        in_opening_db = is_book_move(fen_before, move)  # move is UCI string
         is_book = detect_book_move(
             fullmove_number=fullmove_number,
             eval_before_white=eval_before_cp,
@@ -638,10 +631,10 @@ async def evaluate_move(
             in_opening_db=in_opening_db,
         )
 
-        print("is_book:", is_book)
+        print("is_book: ", is_book)
         print("in_opening_db:", in_opening_db)
 
-        # Brilliant/Great detection
+        # --- OLD general exclam logic (defensive brilliancy, mate-flip, etc.) ---
         exclam_label, brill_info = classify_exclam_move(
             eval_before_white=eval_before_cp,
             eval_after_white=eval_after_cp,
@@ -656,23 +649,43 @@ async def evaluate_move(
             mate_flip=mate_flip,
         )
 
-        # Final label priority
+        # --- NEW sacrifice-based brilliancy (your custom logic) ---
+        # Here:
+        #   - eval_best_reply_white  = eval_after_cp (engine post eval)
+        #   - eval_accept_white      = None for now (we're not forcing the capture line yet)
+        sac_brill = detect_sac_brilliancy(
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            eval_best_pre_white=best_eval_from_pre,
+            eval_played_pre_white=played_eval_from_pre,
+            eval_best_reply_white=eval_after_cp,
+            eval_accept_white=None,
+            mover_color=side_before,
+            sac_result=sac_result,
+        )
+
+
+        # --- Final label priority:
+        # Book > mate-flip Blunder > sac-based Brilliant > general exclam (Brilliant/Great) > Miss > basic
         if in_opening_db:
             label = "Book"
         elif exclam_label == "Blunder":
-            label = "Blunder"
+            label = "Blunder"   # mate-flip catastrophe
+        elif sac_brill.is_brilliant:
+            # ONLY this path is allowed to use 'Brilliant'
+            label = "Brilliant"
         elif exclam_label in ("Brilliant", "Great"):
-            label = exclam_label
+            # Any non-sac brilliancy from the old logic becomes 'Great'
+            label = "Great"
         elif is_miss:
             label = "Miss"
         else:
             label = basic_label
 
-        print("Final Label:", label)
 
+        print("Label: ", label)
         return JSONResponse({
             "fen_before": fen_before,
-            "move": move,
             "eval_before": eval_before_cp,
             "eval_after": eval_after_cp,
             "eval_change": eval_change,
@@ -682,6 +695,7 @@ async def evaluate_move(
             "eval_before_struct": pre_score,
             "eval_after_struct": post_score,
             "is_sacrifice": is_sacrifice,
+            "sacrifice_debug": sac_result.__dict__,       # NEW: see net_loss, attackers, etc.
             "best_mate_in": best_mate_in,
             "played_mate_in": played_mate_in,
             "mate_flip": mate_flip,
@@ -689,11 +703,128 @@ async def evaluate_move(
             "basic_label": basic_label,
             "miss_detected": is_miss,
             "is_book": is_book,
-            "in_opening_db": in_opening_db,
             "exclam_label": exclam_label,
             "brilliancy_info": brill_info.__dict__ if brill_info else None,
+            "sac_brilliancy": sac_brill.__dict__,         # NEW: reason + adv values
             "label": label,
         })
+
+
+
+
+        # # Sacrifice detection
+        # uci_move_obj = chess.Move.from_uci(move)
+        # eval_types_dict = {
+        #     "before": pre_score.get("type") if pre_score else None,
+        #     "after": post_score.get("type") if post_score else None,
+        # }
+
+        # is_sacrifice = is_real_sacrifice(
+        #     board_before=board_before,
+        #     move=uci_move_obj,
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     mover_color=side_before,
+        #     eval_types=eval_types_dict,
+        # )
+
+        # print("SAC DEBUG:", {
+        #     "is_sacrifice": is_sacrifice,
+        #     "eval_before": eval_before_cp,
+        #     "eval_after": eval_after_cp,
+        # })
+
+        # # Mate metadata
+        # best_mate_in = mate_ply(pre_score)
+        # played_mate_in = mate_ply(post_score)
+
+        # pre_is_mate = pre_score.get("type") == "mate"
+        # post_is_mate = post_score.get("type") == "mate"
+
+        # mate_flip = bool(pre_is_mate and post_is_mate and (eval_before_cp * eval_after_cp < 0))
+        # mate_flip_severity = 0
+        # if mate_flip:
+        #     mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
+
+        # # Miss detection
+        # is_miss = detect_miss(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     best_mate_in_plies=best_mate_in,
+        #     played_mate_in_plies=played_mate_in,
+        # )
+
+        # print("Miss detected:", is_miss)
+
+        # # Book detection
+        # in_opening_db = is_book_move(fen_before, move)
+        # is_book = detect_book_move(
+        #     fullmove_number=fullmove_number,
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     cpl=cpl,
+        #     multipv_rank=multipv_rank,
+        #     in_opening_db=in_opening_db,
+        # )
+
+        # print("is_book:", is_book)
+        # print("in_opening_db:", in_opening_db)
+
+        # # Brilliant/Great detection
+        # exclam_label, brill_info = classify_exclam_move(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     is_sacrifice=is_sacrifice,
+        #     is_book=is_book,
+        #     multipv_rank=multipv_rank,
+        #     played_eval_from_pre_white=played_eval_from_pre,
+        #     best_mate_in_plies_pre=best_mate_in,
+        #     played_mate_in_plies_post=played_mate_in,
+        #     mate_flip=mate_flip,
+        # )
+
+        # # Final label priority
+        # if in_opening_db:
+        #     label = "Book"
+        # elif exclam_label == "Blunder":
+        #     label = "Blunder"
+        # elif exclam_label in ("Brilliant", "Great"):
+        #     label = exclam_label
+        # elif is_miss:
+        #     label = "Miss"
+        # else:
+        #     label = basic_label
+
+        # print("Final Label:", label)
+
+        # return JSONResponse({
+        #     "fen_before": fen_before,
+        #     "move": move,
+        #     "eval_before": eval_before_cp,
+        #     "eval_after": eval_after_cp,
+        #     "eval_change": eval_change,
+        #     "multipv_rank": multipv_rank,
+        #     "top_gap": top_gap,
+        #     "cpl": cpl,
+        #     "eval_before_struct": pre_score,
+        #     "eval_after_struct": post_score,
+        #     "is_sacrifice": is_sacrifice,
+        #     "best_mate_in": best_mate_in,
+        #     "played_mate_in": played_mate_in,
+        #     "mate_flip": mate_flip,
+        #     "mate_flip_severity": mate_flip_severity,
+        #     "basic_label": basic_label,
+        #     "miss_detected": is_miss,
+        #     "is_book": is_book,
+        #     "in_opening_db": in_opening_db,
+        #     "exclam_label": exclam_label,
+        #     "brilliancy_info": brill_info.__dict__ if brill_info else None,
+        #     "label": label,
+        # })
 
     except Exception as e:
         logger.error(f"Error in /evaluate: {str(e)}", exc_info=True)
