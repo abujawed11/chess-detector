@@ -1776,10 +1776,53 @@ import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveExplanationCard from './components/MoveExplanationCard';
+import MoveDetailsPanel from './components/MoveDetailsPanel';
 import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
 import { parsePGN } from './utils/pgnParser';
+import { API_BASE_URL } from './config/api';
 
-const STORAGE_KEY = 'pgnAnalysisSession_v1';
+// Helper functions (outside component to prevent re-creation on every render)
+const getClassificationColor = (classification) => {
+  const colors = {
+    brilliant: '#1baca6',
+    book: '#a88865',
+    best: '#9bc02a',
+    excellent: '#96bc4b',
+    good: '#96af8b',
+    miss: '#ffa500',
+    inaccuracy: '#f0c15c',
+    mistake: '#e58f2a',
+    blunder: '#fa412d',
+    unknown: '#9ca3af'
+  };
+  return colors[classification || 'unknown'] || '#9ca3af';
+};
+
+function getBadgeSymbol(classification) {
+  if (!classification) return '';
+  switch (classification.toLowerCase()) {
+    case 'brilliant':
+      return '!!';
+    case 'best':
+      return '!';
+    case 'excellent':
+      return '!?';
+    case 'good':
+      return '✓';
+    case 'miss':
+      return '!?';
+    case 'inaccuracy':
+      return '?!';
+    case 'mistake':
+      return '?';
+    case 'blunder':
+      return '??';
+    case 'book':
+      return '⏺';
+    default:
+      return '';
+  }
+}
 
 export default function PGNAnalysis() {
   const [pgnText, setPgnText] = useState('');
@@ -1806,49 +1849,33 @@ export default function PGNAnalysis() {
 
   const { initialized, analyze } = useStockfish();
 
-  // ───────────────── Helpers ─────────────────
-
-  const getClassificationColor = (classification) => {
-    const colors = {
-      brilliant: '#1baca6',
-      book: '#a88865',
-      best: '#9bc02a',
-      excellent: '#96bc4b',
-      good: '#96af8b',
-      miss: '#ffa500',
-      inaccuracy: '#f0c15c',
-      mistake: '#e58f2a',
-      blunder: '#fa412d',
-      unknown: '#9ca3af'
+  // Cleanup engine on component unmount
+  useEffect(() => {
+    return () => {
+      // Stop engine when component unmounts
+      fetch(`${API_BASE_URL}/stop_engine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(() => {
+        // Ignore errors on unmount
+      });
     };
-    return colors[classification || 'unknown'] || '#9ca3af';
-  };
+  }, []);
 
-  function getBadgeSymbol(classification) {
-    if (!classification) return '';
-    switch (classification.toLowerCase()) {
-      case 'brilliant':
-        return '!!';
-      case 'best':
-        return '!';
-      case 'excellent':
-        return '!!?';
-      case 'good':
-        return '✓';
-      case 'miss':
-        return '!?';
-      case 'inaccuracy':
-        return '?!';
-      case 'mistake':
-        return '?';
-      case 'blunder':
-        return '??';
-      case 'book':
-        return '⏺';
-      default:
-        return '';
+  // Function to stop the engine and free resources
+  const stopEngine = useCallback(async () => {
+    try {
+      console.log('🛑 Stopping Stockfish engine...');
+      const response = await fetch(`${API_BASE_URL}/stop_engine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      console.log('✅ Engine stopped:', data.message);
+    } catch (err) {
+      console.error('❌ Failed to stop engine:', err);
     }
-  }
+  }, []);
 
   const parsePGNText = useCallback((pgn) => {
     try {
@@ -1940,7 +1967,9 @@ export default function PGNAnalysis() {
               evaluation.explanation ||
               getMoveExplanation?.(evaluation) ||
               null,
-            playerMoveSan: move.san
+            playerMoveSan: move.san,
+            // Store full evaluation data for MoveDetailsPanel
+            fullEvaluation: evaluation
           });
         } catch (err) {
           console.error(`❌ Failed to analyze move ${i + 1}`, err);
@@ -1959,15 +1988,21 @@ export default function PGNAnalysis() {
       }
 
       setAnalyzedMoves(analyzed);
+
+      // IMPORTANT: Stop the engine after analysis completes to free CPU
+      console.log('✅ Analysis complete! Stopping engine to free CPU...');
+      await stopEngine();
     } catch (error) {
       console.error('Analysis error:', error);
       alert(
         `Analysis failed: ${error.message}\n\nTry refreshing the page and analyzing again.`
       );
+      // Stop engine even on error
+      await stopEngine();
     } finally {
       setIsAnalyzing(false);
     }
-  }, [game, initialized]);
+  }, [game, initialized, stopEngine]);
 
   const navigateToMove = useCallback(
     (index) => {
@@ -2061,70 +2096,6 @@ export default function PGNAnalysis() {
     }
   }, []);
 
-  // ───────────── LocalStorage – Save session ─────────────
-  useEffect(() => {
-    if (!game) {
-      localStorage.removeItem(STORAGE_KEY);
-      return;
-    }
-
-    const payload = {
-      pgnText,
-      gameInfo,
-      moves,
-      analyzedMoves,
-      currentMoveIndex,
-      currentPosition,
-      flipped,
-      playSpeed
-    };
-
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    } catch (e) {
-      console.error('Failed to save analysis session', e);
-    }
-  }, [
-    game,
-    pgnText,
-    gameInfo,
-    moves,
-    analyzedMoves,
-    currentMoveIndex,
-    currentPosition,
-    flipped,
-    playSpeed
-  ]);
-
-  // ───────────── LocalStorage – Restore session ─────────────
-  useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    try {
-      const data = JSON.parse(raw);
-      if (!data.pgnText) return;
-
-      setPgnText(data.pgnText);
-      const ok = parsePGNText(data.pgnText);
-      if (!ok) return;
-
-      setAnalyzedMoves(data.analyzedMoves || []);
-      setFlipped(!!data.flipped);
-      setPlaySpeed(data.playSpeed || 1500);
-
-      if (
-        typeof data.currentMoveIndex === 'number' &&
-        data.currentMoveIndex >= 0
-      ) {
-        setTimeout(() => {
-          navigateToMove(data.currentMoveIndex);
-        }, 0);
-      }
-    } catch (e) {
-      console.error('Failed to restore analysis session', e);
-    }
-  }, [parsePGNText, navigateToMove]);
 
   // autoplay
   useEffect(() => {
@@ -2379,8 +2350,10 @@ export default function PGNAnalysis() {
             <p className="text-sm text-slate-600">{gameInfo?.date}</p>
           </div>
           <button
-            onClick={() => {
+            onClick={async () => {
               stopPlaying();
+              // Stop engine to free CPU
+              await stopEngine();
               setGame(null);
               setPgnText('');
               setMoves([]);
@@ -2388,7 +2361,6 @@ export default function PGNAnalysis() {
               setCurrentMoveIndex(-1);
               setLastMove(null);
               setMoveBadge(null);
-              localStorage.removeItem(STORAGE_KEY);
             }}
             className="rounded-lg bg-gradient-to-r from-slate-100 to-slate-200 px-4 py-2 font-semibold text-slate-700 transition hover:from-slate-200 hover:to-slate-300"
           >
@@ -2660,14 +2632,22 @@ export default function PGNAnalysis() {
 
           {/* Column 3: Move Evaluation Details + Legend */}
           <div className="flex flex-col gap-4">
-            {/* Move Evaluation Details */}
-            <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
-              <h3 className="mb-3 text-lg font-bold text-emerald-800">
-                Move Evaluation Details
-              </h3>
-              {currentMoveIndex >= 0 &&
-                analyzedMoves[currentMoveIndex] &&
-                analyzedMoves[currentMoveIndex].explanation ? (
+            {/* Detailed Move Evaluation Data */}
+            {currentMoveIndex >= 0 && analyzedMoves[currentMoveIndex]?.fullEvaluation && (
+              <MoveDetailsPanel
+                moveData={analyzedMoves[currentMoveIndex].fullEvaluation}
+                visible={true}
+              />
+            )}
+
+            {/* Move Explanation Card */}
+            {currentMoveIndex >= 0 &&
+              analyzedMoves[currentMoveIndex] &&
+              analyzedMoves[currentMoveIndex].explanation && (
+              <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+                <h3 className="mb-3 text-lg font-bold text-emerald-800">
+                  Move Explanation
+                </h3>
                 <MoveExplanationCard
                   moveNumber={currentMoveIndex + 1}
                   playerName={
@@ -2686,15 +2666,14 @@ export default function PGNAnalysis() {
                   explanation={analyzedMoves[currentMoveIndex].explanation}
                   showDetails={true}
                 />
-              ) : (
-                <p className="text-sm text-emerald-900/80">
-                  Select a move from the move list to see a detailed
-                  explanation and engine evaluation here.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
-
+            {currentMoveIndex < 0 && (
+              <p className="rounded-lg bg-slate-100 p-4 text-sm text-slate-600">
+                Click on a move from the move list to see detailed evaluation and explanation.
+              </p>
+            )}
           </div>
         </div>
       </div>

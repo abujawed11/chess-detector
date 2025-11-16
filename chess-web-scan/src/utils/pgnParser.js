@@ -56,9 +56,9 @@ export function parsePGN(pgnString) {
   try {
     const chess = new Chess();
 
-    console.log('DEBUG: Raw PGN input length:', pgnString.length);
-    console.log('DEBUG: Raw PGN (first 500 chars):', pgnString.substring(0, 500));
-    console.log('DEBUG: Raw PGN contains [Event count:', (pgnString.match(/\[Event/g) || []).length);
+    // console.log('DEBUG: Raw PGN input length:', pgnString.length);
+    // console.log('DEBUG: Raw PGN (first 500 chars):', pgnString.substring(0, 500));
+    // console.log('DEBUG: Raw PGN contains [Event count:', (pgnString.match(/\[Event/g) || []).length);
 
     // Clean up PGN - remove excessive whitespace and normalize newlines
     let cleanedPgn = pgnString
@@ -95,9 +95,9 @@ export function parsePGN(pgnString) {
     // Take only the first game
     const firstGameLines = lines.slice(0, firstGameEnd);
 
-    console.log('DEBUG: Total lines in first game:', firstGameLines.length);
-    console.log('DEBUG: First 5 lines:', firstGameLines.slice(0, 5));
-    console.log('DEBUG: Last 5 lines:', firstGameLines.slice(-5));
+    // console.log('DEBUG: Total lines in first game:', firstGameLines.length);
+    // console.log('DEBUG: First 5 lines:', firstGameLines.slice(0, 5));
+    // console.log('DEBUG: Last 5 lines:', firstGameLines.slice(-5));
 
     // Filter out unsupported headers that chess.js doesn't recognize
     const supportedHeaders = [
@@ -126,13 +126,13 @@ export function parsePGN(pgnString) {
         }
       } else {
         // Not a header, keep it
-        console.log('DEBUG: Keeping non-header line:', line.substring(0, 100));
+        // console.log('DEBUG: Keeping non-header line:', line.substring(0, 100));
         filteredLines.push(firstGameLines[i]);
       }
     }
 
-    console.log('DEBUG: Filtered lines count:', filteredLines.length);
-    console.log('DEBUG: Last header index:', lastHeaderIndex);
+    // console.log('DEBUG: Filtered lines count:', filteredLines.length);
+    // console.log('DEBUG: Last header index:', lastHeaderIndex);
 
     // Rebuild with proper spacing
     const processedLines = [];
@@ -152,9 +152,9 @@ export function parsePGN(pgnString) {
 
     cleanedPgn = processedLines.join('\n').trim();
 
-    console.log('DEBUG: Cleaned PGN length:', cleanedPgn.length);
-    console.log('DEBUG: Cleaned PGN (first 500 chars):', cleanedPgn.substring(0, 500));
-    console.log('DEBUG: Cleaned PGN (last 300 chars):', cleanedPgn.substring(cleanedPgn.length - 300));
+    // console.log('DEBUG: Cleaned PGN length:', cleanedPgn.length);
+    // console.log('DEBUG: Cleaned PGN (first 500 chars):', cleanedPgn.substring(0, 500));
+    // console.log('DEBUG: Cleaned PGN (last 300 chars):', cleanedPgn.substring(cleanedPgn.length - 300));
 
     // Ensure the game has a result marker at the end
     const resultPattern = /\s+(1-0|0-1|1\/2-1\/2|\*)\s*$/;
@@ -186,36 +186,36 @@ export function parsePGN(pgnString) {
       .split('\n')
       .filter(line => !line.trim().startsWith('['));
 
-    console.log('DEBUG: Move section lines count:', moveSectionLines.length);
-    console.log('DEBUG: Move section lines:', moveSectionLines);
+    // console.log('DEBUG: Move section lines count:', moveSectionLines.length);
+    // console.log('DEBUG: Move section lines:', moveSectionLines);
 
     const moveSection = moveSectionLines.join(' ').trim();
 
-    console.log('DEBUG: Move section (raw):', moveSection.substring(0, 500));
+    // console.log('DEBUG: Move section (raw):', moveSection.substring(0, 500));
 
     // Parse moves - use a proper function to strip variations and comments
     let movesText = moveSection;
 
     // Remove comments in curly braces (handle nested ones)
     movesText = removeComments(movesText);
-    console.log('DEBUG: After removing comments:', movesText.substring(0, 300));
+    // console.log('DEBUG: After removing comments:', movesText.substring(0, 300));
 
     // Remove variations in parentheses (handle nested ones)
     movesText = removeVariations(movesText);
-    console.log('DEBUG: After removing variations:', movesText.substring(0, 300));
+    // console.log('DEBUG: After removing variations:', movesText.substring(0, 300));
 
     // Remove NAG annotations like $1, $2, etc.
     movesText = movesText.replace(/\$\d+/g, '');
-    console.log('DEBUG: After removing NAGs:', movesText.substring(0, 300));
+    // console.log('DEBUG: After removing NAGs:', movesText.substring(0, 300));
 
     // Remove move numbers
     movesText = movesText.replace(/\d+\.\.\./g, ' '); // Black move numbers like 3...
     movesText = movesText.replace(/\d+\./g, ' '); // White move numbers like 1.
-    console.log('DEBUG: After removing move numbers:', movesText.substring(0, 300));
+    // console.log('DEBUG: After removing move numbers:', movesText.substring(0, 300));
 
     // Remove result markers (anywhere in the text)
     movesText = movesText.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, '');
-    console.log('DEBUG: After removing result:', movesText.substring(0, 300));
+    // console.log('DEBUG: After removing result:', movesText.substring(0, 300));
 
     movesText = movesText.trim();
 

@@ -9,8 +9,7 @@ import StockfishAnalysis from './StockfishAnalysis'
 import EngineTest from './EngineTest'
 import Home from './Home'
 import PGNAnalysis from './PGNAnalysis'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+import { API_BASE_URL } from './config/api'
 
 export default function App(){
   const [currentPage, setCurrentPage] = useState('home') // 'home', 'scanner', 'analysis', or 'test'
@@ -44,7 +43,7 @@ export default function App(){
       const fd = new FormData()
       fd.append('file', f)
       fd.append('flip_ranks', 'false')
-      const res = await fetch(`${API_BASE}/infer`, { method:'POST', body: fd })
+      const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
       const json = await res.json()
       if(res.ok && json.board_corners) {
         setCorners(json.board_corners)
@@ -78,7 +77,7 @@ export default function App(){
       fd.append('flip_ranks', String(flipRanks))
       fd.append('corners', JSON.stringify(adjustedCorners))
       
-      const res = await fetch(`${API_BASE}/infer`, { method:'POST', body: fd })
+      const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
       const json = await res.json()
       if(!res.ok){ throw new Error(json?.error || 'Inference failed') }
       

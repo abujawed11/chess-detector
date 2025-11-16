@@ -208,3 +208,4 @@ uvicorn app:app --reload --port 8000
 
 For maximum speed, use **Depth 12 or 15**. For balanced analysis, stick with the default **Depth 18**.
 
+

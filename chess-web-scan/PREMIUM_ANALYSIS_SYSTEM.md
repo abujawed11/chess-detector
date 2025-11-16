@@ -377,3 +377,4 @@ No breaking changes - existing functionality is preserved and enhanced!
 **Built with ♟️ for chess analysis enthusiasts**
 
 
+

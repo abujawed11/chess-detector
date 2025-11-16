@@ -347,3 +347,4 @@ VITE_API_BASE_URL=http://localhost:8000
 
 **That's it! Your chess app now uses backend-only native Stockfish for all analysis.** ♟️
 
+

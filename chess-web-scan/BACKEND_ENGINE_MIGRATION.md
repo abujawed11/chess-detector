@@ -329,3 +329,4 @@ interface ThreadInfo {
 
 All analysis now flows through the backend, leveraging native Stockfish for maximum strength and performance.
 
+

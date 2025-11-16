@@ -192,3 +192,4 @@ If you're still stuck:
 2. Share the **browser console output** (F12 → Console tab)
 3. Share the output of `python diagnose.py`
 
+
