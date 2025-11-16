@@ -1,6 +1,7 @@
 import base64
 import os
 import sys
+import time
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -115,32 +116,65 @@ async def start_engine_endpoint():
     """Start the persistent Stockfish engine"""
     global persistent_engine
     try:
+        # Check if already running and healthy
         if persistent_engine is not None:
-            return JSONResponse({
-                "status": "already_running",
-                "message": "Engine is already running"
-            })
+            try:
+                proc, send, recv = persistent_engine
+                if proc.poll() is None:  # Process is still alive
+                    logger.info("Engine already running and healthy")
+                    return JSONResponse({
+                        "status": "already_running",
+                        "message": "Engine is already running",
+                        "engine_path": ENGINE_PATH
+                    })
+                else:
+                    logger.warning(f"Existing engine process died (returncode={proc.returncode}), restarting...")
+                    persistent_engine = None
+            except Exception as check_error:
+                logger.warning(f"Error checking existing engine: {check_error}, will restart")
+                persistent_engine = None
 
+        # Log environment
         logger.info(f"STOCKFISH_PATH from env: {os.getenv('STOCKFISH_PATH')}")
         logger.info(f"ENGINE_PATH being used: {ENGINE_PATH}")
         logger.info(f"Engine file exists: {os.path.exists(ENGINE_PATH)}")
 
+        if not os.path.exists(ENGINE_PATH):
+            raise FileNotFoundError(f"Stockfish binary not found at: {ENGINE_PATH}")
+
         logger.info("Starting persistent Stockfish engine...")
         hash_mb = 512
         threads = 4
-        persistent_engine = start_engine({"Hash": hash_mb, "Threads": threads})
-        logger.info(f"Stockfish engine started (Hash={hash_mb}MB, Threads={threads})")
+        
+        try:
+            persistent_engine = start_engine({"Hash": hash_mb, "Threads": threads})
+            logger.info(f"Stockfish engine started successfully (Hash={hash_mb}MB, Threads={threads})")
+        except Exception as start_error:
+            logger.error(f"Failed to start engine: {start_error}", exc_info=True)
+            persistent_engine = None
+            raise
 
         return JSONResponse({
             "status": "started",
             "message": "Engine started successfully",
-            "engine_path": ENGINE_PATH
+            "engine_path": ENGINE_PATH,
+            "hash_mb": hash_mb,
+            "threads": threads
         })
+        
+    except FileNotFoundError as e:
+        logger.error(f"Stockfish binary not found: {str(e)}")
+        return JSONResponse({
+            "status": "error",
+            "message": f"Stockfish binary not found: {str(e)}",
+            "engine_path": ENGINE_PATH
+        }, status_code=500)
     except Exception as e:
         logger.error(f"Failed to start engine: {str(e)}", exc_info=True)
         return JSONResponse({
             "status": "error",
-            "message": str(e)
+            "message": f"Engine initialization failed: {str(e)}",
+            "details": str(type(e).__name__)
         }, status_code=500)
 
 
@@ -193,7 +227,7 @@ async def analyze_position(
     multipv: int = Form(3)
 ):
     """
-    Analyze a chess position from FEN string
+    Analyze a chess position from FEN string - returns frontend-compatible format
 
     Args:
         fen: FEN string of the position to analyze
@@ -201,33 +235,129 @@ async def analyze_position(
         multipv: Number of principal variations to return (default: 3)
 
     Returns:
-        List of analysis results with scores and principal variations
+        {
+            "evaluation": { "type": "cp" | "mate", "value": number },
+            "lines": [
+                {
+                    "multipv": number,
+                    "cp": number | null,
+                    "mate": number | null,
+                    "depth": number,
+                    "pv": ["e2e4", "e7e5", ...],
+                    "pvSan": "1. e4 e5 2. Nf3 Nc6 ..." (optional)
+                }
+            ],
+            "depth": number,
+            "bestMove": "e2e4"
+        }
     """
     global persistent_engine
 
     try:
-        logger.info(f"Analyzing FEN: {fen[:60]}... (depth={depth}, multipv={multipv})")
+        start_time = time.time()
+        logger.info(f"📊 /analyze request: FEN={fen[:60]}... depth={depth} multipv={multipv}")
 
         # Validate FEN
         try:
             board = chess.Board(fen)
         except Exception as e:
+            logger.error(f"Invalid FEN: {str(e)}")
             return JSONResponse({
                 "error": "INVALID_FEN",
                 "message": f"Invalid FEN string: {str(e)}"
             }, status_code=400)
 
         # Analyze using persistent engine if available, otherwise create temporary one
+        results = None
         if persistent_engine is not None:
-            results = analyze_fen_multipv_persistent(fen, persistent_engine, depth=depth, multipv=multipv)
-        else:
+            try:
+                results = analyze_fen_multipv_persistent(fen, persistent_engine, depth=depth, multipv=multipv)
+            except Exception as engine_error:
+                logger.error(f"Persistent engine failed: {str(engine_error)}")
+                logger.info("Restarting persistent engine...")
+                
+                # Kill the dead engine
+                try:
+                    proc, send, recv = persistent_engine
+                    proc.kill()
+                except:
+                    pass
+                
+                # Restart persistent engine
+                try:
+                    persistent_engine = start_engine({"Hash": 512, "Threads": 4})
+                    logger.info("Engine restarted successfully")
+                    # Try analysis again with new engine
+                    results = analyze_fen_multipv_persistent(fen, persistent_engine, depth=depth, multipv=multipv)
+                except Exception as restart_error:
+                    logger.error(f"Failed to restart engine: {str(restart_error)}")
+                    # Fall back to temporary engine
+                    logger.info("Falling back to temporary engine...")
+                    persistent_engine = None
+        
+        # If persistent engine not available or failed, use temporary engine
+        if results is None:
+            logger.info("Using temporary engine for analysis")
             results = analyze_fen_multipv(fen, depth=depth, multipv=multipv)
 
+        if not results:
+            logger.warning("No analysis results returned from engine")
+            return JSONResponse({
+                "error": "NO_RESULTS",
+                "message": "Engine returned no analysis results"
+            }, status_code=500)
+
+        # Convert to frontend-compatible format
+        # Frontend expects { evaluation, lines, depth, bestMove }
+        lines = []
+        for item in results:
+            score = item.get("score", {})
+            pv = item.get("pv", [])
+            
+            line = {
+                "multipv": item.get("multipv", 1),
+                "cp": score.get("value") if score.get("type") == "cp" else None,
+                "mate": score.get("value") if score.get("type") == "mate" else None,
+                "depth": depth,
+                "pv": pv,
+                "score": score  # Include original score for compatibility
+            }
+            
+            # Optional: Convert PV to SAN notation
+            try:
+                temp_board = chess.Board(fen)
+                san_moves = []
+                for uci_move in pv[:10]:  # Limit to first 10 moves for performance
+                    try:
+                        move = chess.Move.from_uci(uci_move)
+                        san = temp_board.san(move)
+                        san_moves.append(san)
+                        temp_board.push(move)
+                    except:
+                        break
+                if san_moves:
+                    line["pvSan"] = " ".join(san_moves)
+            except Exception:
+                pass
+            
+            lines.append(line)
+
+        # Top evaluation is from the first line
+        evaluation = results[0].get("score", {"type": "cp", "value": 0}) if results else {"type": "cp", "value": 0}
+        
+        # Best move is the first move of the first PV
+        best_move = results[0].get("pv", [None])[0] if results else None
+
+        elapsed = time.time() - start_time
+        logger.info(f"✅ /analyze complete in {elapsed:.2f}s: eval={evaluation} bestMove={best_move}")
+
         return JSONResponse({
-            "fen": fen,
+            "evaluation": evaluation,
+            "lines": lines,
             "depth": depth,
-            "multipv": multipv,
-            "analysis": results,
+            "bestMove": best_move,
+            # Extra metadata (optional)
+            "fen": fen,
             "side_to_move": "white" if board.turn == chess.WHITE else "black"
         })
 

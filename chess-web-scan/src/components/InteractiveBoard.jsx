@@ -5,64 +5,6 @@ import { getPieceImageUrl } from '../utils/chessUtils';
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-// Move classification badge styles
-const BADGE_STYLES = {
-  brilliant: {
-    gradient: 'from-emerald-400 to-cyan-400',
-    shadow: 'shadow-[0_0_25px_rgba(16,185,129,0.6)]',
-    icon: '💎',
-    glow: 'rgba(16, 185, 129, 0.4)'
-  },
-  best: {
-    gradient: 'from-emerald-500 to-green-500',
-    shadow: 'shadow-[0_0_20px_rgba(34,197,94,0.5)]',
-    icon: '✓',
-    glow: 'rgba(34, 197, 94, 0.3)'
-  },
-  excellent: {
-    gradient: 'from-blue-400 to-blue-600',
-    shadow: 'shadow-[0_0_20px_rgba(59,130,246,0.5)]',
-    icon: '👍',
-    glow: 'rgba(59, 130, 246, 0.3)'
-  },
-  good: {
-    gradient: 'from-slate-400 to-slate-600',
-    shadow: 'shadow-[0_0_15px_rgba(100,116,139,0.4)]',
-    icon: '✓',
-    glow: 'rgba(100, 116, 139, 0.3)'
-  },
-  miss: {
-    gradient: 'from-orange-400 to-amber-500',
-    shadow: 'shadow-[0_0_22px_rgba(255,165,0,0.6)]',
-    icon: 'Ø',
-    glow: 'rgba(255, 165, 0, 0.4)'
-  },
-  inaccuracy: {
-    gradient: 'from-yellow-400 to-amber-500',
-    shadow: 'shadow-[0_0_20px_rgba(251,191,36,0.5)]',
-    icon: '?',
-    glow: 'rgba(251, 191, 36, 0.4)'
-  },
-  mistake: {
-    gradient: 'from-orange-400 to-orange-600',
-    shadow: 'shadow-[0_0_22px_rgba(251,146,60,0.6)]',
-    icon: '!',
-    glow: 'rgba(251, 146, 60, 0.4)'
-  },
-  blunder: {
-    gradient: 'from-red-500 to-red-700',
-    shadow: 'shadow-[0_0_25px_rgba(239,68,68,0.7)]',
-    icon: '⚠',
-    glow: 'rgba(239, 68, 68, 0.5)'
-  },
-  book: {
-    gradient: 'from-amber-600 to-yellow-700',
-    shadow: 'shadow-[0_0_15px_rgba(217,119,6,0.4)]',
-    icon: '📖',
-    glow: 'rgba(217, 119, 6, 0.3)'
-  }
-};
-
 export default function InteractiveBoard({ 
   fen, 
   onMove, 
@@ -229,17 +171,17 @@ export default function InteractiveBoard({
   const squareToCoords = useCallback((square) => {
     const file = square[0];
     const rank = parseInt(square[1]);
-    
+
     const displayFiles = flipped ? [...FILES].reverse() : FILES;
     const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
-    
+
     const fileIdx = displayFiles.indexOf(file);
     const rankIdx = displayRanks.indexOf(rank);
-    
-    const squareSize = 560 / 8; // Board is 560x560
+
+    const squareSize = 680 / 8; // Board is 680x680 (increased from 560)
     const x = fileIdx * squareSize + squareSize / 2;
     const y = rankIdx * squareSize + squareSize / 2;
-    
+
     return { x, y };
   }, [flipped]);
 
@@ -260,6 +202,7 @@ export default function InteractiveBoard({
       const isHighlighted = highlightSquares.includes(square);
       const isDragging = dragFrom === square;
       const isLastMoveSquare = lastMove && (square === lastMove.from || square === lastMove.to);
+      const hasBadge = moveBadge && moveBadge.square === square;
 
       squares.push(
         <div
@@ -329,6 +272,21 @@ export default function InteractiveBoard({
                 background: piece ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.2)',
                 border: piece ? '3px solid rgba(0,0,0,0.3)' : 'none'
               }} />
+            </div>
+          )}
+
+          {/* Move Badge (Chess.com style - inside square, top-right corner) */}
+          {hasBadge && moveBadge.symbol && (
+            <div
+              className="absolute right-1 top-1 rounded-lg px-2 py-1 text-base font-extrabold leading-none shadow-lg"
+              style={{
+                backgroundColor: moveBadge.color,
+                color: '#fff',
+                pointerEvents: 'none',
+                zIndex: 10
+              }}
+            >
+              {moveBadge.symbol}
             </div>
           )}
 
@@ -405,8 +363,8 @@ export default function InteractiveBoard({
           position: 'absolute',
           top: 0,
           left: 0,
-          width: 560,
-          height: 560,
+          width: 680,
+          height: 680,
           pointerEvents: 'none',
           zIndex: 9
         }}
@@ -523,8 +481,8 @@ export default function InteractiveBoard({
           position: 'absolute',
           top: 0,
           left: 0,
-          width: 560,
-          height: 560,
+          width: 680,
+          height: 680,
           pointerEvents: 'none',
           zIndex: 10
         }}
@@ -649,7 +607,7 @@ export default function InteractiveBoard({
 
     const displayFiles = flipped ? [...FILES].reverse() : FILES;
     const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
-    const squareSize = 560 / 8;
+    const squareSize = 680 / 8; // Updated to match new board size
 
     return tacticalMotifs.map((motif, idx) => {
       const file = motif.square[0];
@@ -702,93 +660,11 @@ export default function InteractiveBoard({
     });
   };
 
-  // Render move classification badge (Chess.com style - on square corners)
-  const renderMoveBadge = () => {
-    // console.log('🔍 renderMoveBadge called, moveBadge:', moveBadge);
-    
-    if (!moveBadge || !moveBadge.square || !moveBadge.classification) {
-      // console.log('❌ Badge not rendered - missing data');
-      return null;
-    }
-
-    const badgeStyle = BADGE_STYLES[moveBadge.classification];
-    if (!badgeStyle) {
-      console.log('❌ Badge style not found for:', moveBadge.classification);
-      return null;
-    }
-    
-    console.log('✅ Rendering badge with style:', badgeStyle);
-
-    // Get square position
-    const file = moveBadge.square[0];
-    const rank = parseInt(moveBadge.square[1]);
-    
-    const displayFiles = flipped ? [...FILES].reverse() : FILES;
-    const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
-    
-    const fileIdx = displayFiles.indexOf(file);
-    const rankIdx = displayRanks.indexOf(rank);
-    
-    const squareSize = 560 / 8;
-    
-    // Position badge at top-right corner of the square (like Chess.com)
-    const badgeX = (fileIdx + 1) * squareSize - 8; // Right edge minus padding
-    const badgeY = rankIdx * squareSize + 8; // Top edge plus padding
-    
-    return (
-      <div
-        className="pointer-events-none absolute z-20"
-        style={{
-          left: badgeX,
-          top: badgeY,
-          transform: 'translate(-100%, 0%)',
-        }}
-      >
-        {/* Outer glow ring (pulsing) */}
-        <div
-          className="absolute inset-0 rounded-full blur-md animate-pulse"
-          style={{
-            background: badgeStyle.glow,
-            transform: 'scale(1.8)',
-            opacity: 0.6
-          }}
-        />
-        
-        {/* Badge icon circle */}
-        <div
-          className={`
-            relative flex h-8 w-8 items-center justify-center rounded-full
-            bg-gradient-to-br ${badgeStyle.gradient}
-            ${badgeStyle.shadow} ring-2 ring-white/50
-            animate-[bounceIn_0.3s_ease-out]
-          `}
-        >
-          <span className="text-base font-bold text-white drop-shadow-lg">
-            {badgeStyle.icon}
-          </span>
-        </div>
-        
-        {/* Label tooltip (appears on hover, but always visible for now) */}
-        {moveBadge.label && (
-          <div
-            className={`
-              absolute left-1/2 top-full mt-1 -translate-x-1/2
-              whitespace-nowrap rounded-md bg-gradient-to-br ${badgeStyle.gradient}
-              px-2 py-1 text-xs font-bold text-white shadow-lg
-              animate-[slideDown_0.3s_ease-out_0.2s_both]
-            `}
-          >
-            {moveBadge.label}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div style={{
-      width: 560,
-      height: 560,
+      width: 680,
+      height: 680,
       border: '4px solid #8b5cf6',
       borderRadius: 12,
       overflow: 'hidden',
@@ -811,7 +687,6 @@ export default function InteractiveBoard({
       {renderHoverArrow()}
       {renderArrow()}
       {renderTacticalMotifs()}
-      {renderMoveBadge()}
 
       {/* Promotion Dialog */}
       {promotionDialog && (

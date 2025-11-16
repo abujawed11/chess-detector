@@ -67,28 +67,71 @@ def start_engine(extra_options=None):
     """
     if not os.path.exists(ENGINE_PATH):
         raise FileNotFoundError(f"Stockfish binary not found at: {ENGINE_PATH}")
-    proc = subprocess.Popen(
-        [ENGINE_PATH],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        universal_newlines=True, bufsize=1
-    )
+    
+    # Create subprocess with proper configuration for cross-platform support
+    import sys
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Starting Stockfish engine from: {ENGINE_PATH}")
+    
+    try:
+        proc = subprocess.Popen(
+            [ENGINE_PATH],
+            stdin=subprocess.PIPE, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,  # Separate stderr to avoid mixing
+            universal_newlines=True,
+            bufsize=1,
+            # Windows-specific: don't show console window
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+    except Exception as e:
+        logger.error(f"Failed to start Stockfish process: {e}")
+        raise RuntimeError(f"Failed to start Stockfish: {e}")
+    
     def send(cmd: str):
-        proc.stdin.write(cmd + "\n")
-        proc.stdin.flush()
+        try:
+            proc.stdin.write(cmd + "\n")
+            proc.stdin.flush()
+        except Exception as e:
+            raise RuntimeError(f"Failed to send command to engine: {e}")
+    
     def recv():
-        for line in proc.stdout:
-            yield line.strip()
+        try:
+            for line in proc.stdout:
+                yield line.strip()
+        except Exception as e:
+            raise RuntimeError(f"Failed to read from engine: {e}")
+    
     # Init UCI
-    send("uci")
-    # set options
-    if extra_options:
-        for k,v in extra_options.items():
-            send(f"setoption name {k} value {v}")
-    send("isready")
-    # consume until readyok
-    for line in recv():
-        if line == "readyok":
-            break
+    try:
+        send("uci")
+        # set options
+        if extra_options:
+            for k,v in extra_options.items():
+                send(f"setoption name {k} value {v}")
+        send("isready")
+        # consume until readyok
+        readyok_received = False
+        for line in recv():
+            if line == "readyok":
+                readyok_received = True
+                break
+        
+        if not readyok_received:
+            raise RuntimeError("Engine did not respond with readyok during initialization")
+        
+        logger.info("Stockfish engine initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Engine initialization failed: {e}")
+        try:
+            proc.kill()
+        except:
+            pass
+        raise RuntimeError(f"Failed to initialize engine: {e}")
+    
     return proc, send, recv
 
 def analyze_fen_multipv_persistent(fen: str, engine_tuple, depth: int = 18, multipv: int = 3):
@@ -97,51 +140,78 @@ def analyze_fen_multipv_persistent(fen: str, engine_tuple, depth: int = 18, mult
     Returns list of dicts: [{'multipv':1,'score':{'type':'cp'|'mate','value':int},'pv':[SAN/UCI? raw tokens]}, ...]
     """
     proc, send, recv = engine_tuple
-    send("ucinewgame")
-    # Set MultiPV for this search
-    send(f"setoption name MultiPV value {multipv}")
-    send("isready")
-    # Wait for readyok
-    for line in recv():
-        if line == "readyok":
-            break
-    send(f"position fen {fen}")
-    send(f"go depth {depth}")
-    lines = []
-    results = {}
-    for line in recv():
-        if line.startswith("info "):
-            parts = line.split()
-            if "multipv" in parts and "score" in parts and "pv" in parts:
-                try:
-                    mpv = int(parts[parts.index("multipv")+1])
-                    sc_idx = parts.index("score")
-                    sc_type = parts[sc_idx+1]
-                    sc_val = int(parts[sc_idx+2])
-                    pv_idx = parts.index("pv")
-                    pv_moves = parts[pv_idx+1:]
-                    results[mpv] = {"multipv": mpv, "score": {"type": sc_type, "value": sc_val}, "pv": pv_moves}
-                except Exception:
-                    pass
-        elif line.startswith("bestmove"):
-            break
-
-    # Sort results by multipv rank
-    sorted_results = [results[k] for k in sorted(results.keys())]
-
-    # Calculate gap between PV#1 and PV#2 (legacy, not used in new code)
-    if len(sorted_results) >= 2:
-        best_score = sorted_results[0]["score"]
-        second_score = sorted_results[1]["score"]
-        best_cp = best_score["value"] if best_score["type"] == "cp" else (10000 if best_score["value"] > 0 else -10000)
-        second_cp = second_score["value"] if second_score["type"] == "cp" else (10000 if second_score["value"] > 0 else -10000)
-        gap = abs(best_cp - second_cp)
-        sorted_results[0]["gap_to_second"] = gap
-    else:
-        if sorted_results:
-            sorted_results[0]["gap_to_second"] = 0
-
-    return sorted_results
+    
+    # Check if process is still alive
+    if proc.poll() is not None:
+        raise RuntimeError(f"Stockfish process died with return code {proc.returncode}")
+    
+    try:
+        send("ucinewgame")
+        # Set MultiPV for this search
+        send(f"setoption name MultiPV value {multipv}")
+        send("isready")
+        
+        # Wait for readyok with timeout
+        readyok_found = False
+        for line in recv():
+            if line == "readyok":
+                readyok_found = True
+                break
+        
+        if not readyok_found:
+            raise RuntimeError("Engine did not respond with readyok")
+        
+        send(f"position fen {fen}")
+        send(f"go depth {depth}")
+        
+        lines = []
+        results = {}
+        bestmove_found = False
+        
+        for line in recv():
+            if line.startswith("info "):
+                parts = line.split()
+                if "multipv" in parts and "score" in parts and "pv" in parts:
+                    try:
+                        mpv = int(parts[parts.index("multipv")+1])
+                        sc_idx = parts.index("score")
+                        sc_type = parts[sc_idx+1]
+                        sc_val = int(parts[sc_idx+2])
+                        pv_idx = parts.index("pv")
+                        pv_moves = parts[pv_idx+1:]
+                        results[mpv] = {"multipv": mpv, "score": {"type": sc_type, "value": sc_val}, "pv": pv_moves}
+                    except Exception as e:
+                        pass
+            elif line.startswith("bestmove"):
+                bestmove_found = True
+                break
+        
+        if not bestmove_found:
+            raise RuntimeError("Engine did not return bestmove")
+        
+        # Sort results by multipv rank
+        sorted_results = [results[k] for k in sorted(results.keys())]
+        
+        if not sorted_results:
+            raise RuntimeError("No analysis results from engine")
+        
+        # Calculate gap between PV#1 and PV#2 (legacy, not used in new code)
+        if len(sorted_results) >= 2:
+            best_score = sorted_results[0]["score"]
+            second_score = sorted_results[1]["score"]
+            best_cp = best_score["value"] if best_score["type"] == "cp" else (10000 if best_score["value"] > 0 else -10000)
+            second_cp = second_score["value"] if second_score["type"] == "cp" else (10000 if second_score["value"] > 0 else -10000)
+            gap = abs(best_cp - second_cp)
+            sorted_results[0]["gap_to_second"] = gap
+        else:
+            if sorted_results:
+                sorted_results[0]["gap_to_second"] = 0
+        
+        return sorted_results
+        
+    except Exception as e:
+        # If there's an error, the engine might be in a bad state
+        raise RuntimeError(f"Engine communication error: {str(e)}")
 
 def analyze_fen_multipv(fen: str, depth: int = 18, multipv: int = 3, hash_mb: int = 256, threads: int = 2):
     """

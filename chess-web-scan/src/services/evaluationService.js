@@ -5,7 +5,7 @@
  * NO LOCAL CLASSIFICATION - Everything done on backend with native Stockfish
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 /**
  * Evaluate a single move using backend
@@ -92,6 +92,7 @@ export function getMoveBadge(evaluation) {
     'Brilliant': { symbol: '!!', color: '#1baca6', icon: '💎' },
     'Great': { symbol: '!', color: '#5c9fc4', icon: '⭐' },
     'Best': { symbol: '', color: '#96bc4b', icon: '✓' },
+    'Excellent': { symbol: '', color: '#9bc02a', icon: '✨' },  // Added Excellent
     'Good': { symbol: '', color: '#96af8b', icon: '' },
     'Book': { symbol: '', color: '#a88865', icon: '📖' },
     'Inaccuracy': { symbol: '?!', color: '#f0c15c', icon: '⚠️' },
@@ -141,6 +142,10 @@ export function getMoveExplanation(evaluation) {
 
   if (label === 'Best') {
     return "This is the engine's top choice.";
+  }
+
+  if (label === 'Excellent') {
+    return 'An excellent move with very minimal loss in accuracy.';
   }
 
   if (label === 'Good') {

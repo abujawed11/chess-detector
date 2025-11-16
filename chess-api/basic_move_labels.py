@@ -190,22 +190,38 @@ def is_real_sacrifice(
 # Basic Label Classification
 # ---------------------------------------------------------------------------
 
-LABEL_ORDER = ["Best", "Good", "Inaccuracy", "Mistake", "Blunder"]
+LABEL_ORDER = ["Best", "Excellent", "Good", "Inaccuracy", "Mistake", "Blunder"]
 LABEL_RANK = {name: i for i, name in enumerate(LABEL_ORDER)}
 
 
 def base_label_from_cpl(cpl: float | None, multipv_rank: int | None) -> str:
     """
-    Raw engine severity → one of: Best / Good / Inaccuracy / Mistake / Blunder
+    Raw engine severity → one of:
+        Best / Excellent / Good / Inaccuracy / Mistake / Blunder
+
+    cpl:
+        Centipawn loss vs engine best (>= 0, already absolute).
+    multipv_rank:
+        1 if played move is engine PV #1, else >1 or None.
     """
     if cpl is None:
+        # Fail-safe: if something went wrong, treat as Inaccuracy
         return "Inaccuracy"
 
-    if cpl <= 20:
-        return "Best" if (multipv_rank == 1) else "Good"
+    # Very near-perfect moves
+    if cpl <= 10:
+        # If it's literally PV#1, call it Best,
+        # otherwise it's still almost perfect (Excellent).
+        return "Best" if (multipv_rank == 1) else "Excellent"
 
-    if cpl <= 60:
+    # Still extremely accurate: only a tiny CPL loss
+    if cpl <= 30:
+        return "Excellent"
+
+    # Solid moves: you lost a bit more but still fine
+    if cpl <= 80:
         return "Good"
+
     if cpl <= 200:
         return "Inaccuracy"
     if cpl <= 500:
@@ -262,27 +278,33 @@ def classify_basic_move(
         if label == "Mistake" and cpl <= 250:
             label = "Inaccuracy"
 
-    # Large improvement
-    if player_delta >= 100:
+    # Large improvement for mover → be kinder than pure CPL
+    if player_delta >= 100:  # mover improved by ≥ 1 pawn
         if label == "Blunder":
             label = "Mistake"
         elif label == "Mistake":
             label = "Inaccuracy"
         elif label == "Inaccuracy":
             label = "Good"
+        elif label == "Good":
+            label = "Excellent"  # Reward significant improvement
 
-    # Large worsening
-    if player_delta <= -150:
-        if label == "Good":
+    # Large worsening for mover → be harsher
+    if player_delta <= -150:  # mover worsened by ≥ 1.5 pawns
+        if label == "Excellent":
+            label = "Good"
+        elif label == "Good":
             label = "Inaccuracy"
         elif label == "Inaccuracy" and cpl >= 150:
             label = "Mistake"
 
-    # Huge rescue
+    # Huge rescue (optional but nice)
+    # From completely lost to at least "not dead" with big improvement
     if before_state == "Lost" and after_state in ("Equalish", "Winning", "Won"):
-        if player_delta >= 300:
-            if LABEL_RANK[label] > LABEL_RANK["Good"]:
-                label = "Good"
+        if player_delta >= 300:  # improved by ≥ 3 pawns
+            # Never call such a move worse than Excellent
+            if LABEL_RANK[label] > LABEL_RANK["Excellent"]:
+                label = "Excellent"
 
     # Already totally winning
     if before_state == "Won" and after_state == "Won":

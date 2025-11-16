@@ -196,3 +196,4 @@ const MoveExplanationCard = ({
 
 export default MoveExplanationCard;
 
+

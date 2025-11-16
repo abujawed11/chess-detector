@@ -9,6 +9,7 @@ import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
 import EngineLines from './components/EngineLines';
 import MoveExplanationCard from './components/MoveExplanationCard';
+import MoveDetailsPanel from './components/MoveDetailsPanel';
 // REMOVED: Old classification imports (now using backend)
 // Backend handles all classification via /evaluate endpoint
 import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
@@ -48,7 +49,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
   const [lastMoveClassification, setLastMoveClassification] = useState(null);
   const [lastMove, setLastMove] = useState(null); // { from: 'e2', to: 'e4' }
-  const [analysisDepth, setAnalysisDepth] = useState(22);
+  const [analysisDepth, setAnalysisDepth] = useState(18); // Reduced from 22 for better performance
   const [storedAnalysis, setStoredAnalysis] = useState(null);
   const [engineLines, setEngineLines] = useState([]);
   const [isProcessingMove, setIsProcessingMove] = useState(false);
@@ -167,15 +168,80 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
 
     try {
-      let result, bestMoveForNewPosition;
-      
-      // Only analyze if game is not over
+      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a', isBrilliantV2: false };
+      let explanation = null;
+      let bestMoveForNewPosition = null;
+      let evaluationAfterMove = null;
+      let result = null;
+
+      // OPTIMIZATION: Run move classification AND position analysis in PARALLEL!
+      // This cuts total time roughly in HALF
       if (!isGameOverPosition) {
-        result = await analyze(newFen, { depth: analysisDepth, multiPV: 3 });
-        bestMoveForNewPosition = result.lines[0]?.pv[0];
-        setStoredAnalysis(result);
-        setCurrentEval(result.evaluation);
-        setEngineLines(result.lines || []);
+        const promises = [];
+        
+        // Promise 1: Analyze new position for engine lines (always needed)
+        promises.push(
+          analyze(newFen, { depth: analysisDepth, multiPV: 3 })
+            .then(res => { result = res; })
+            .catch(err => console.error('Analysis error:', err))
+        );
+        
+        // Promise 2: Classify the move (only if we have previous analysis)
+        if (previousAnalysis?.lines?.length) {
+          const movePlayed = move.from + move.to + (move.promotion || '');
+          
+          promises.push(
+            evaluateMove(previousFen, movePlayed, analysisDepth, 5)
+              .then(evaluation => {
+                console.log('✅ Backend evaluation result:', evaluation);
+                
+                const badge = getMoveBadge(evaluation);
+                explanation = getMoveExplanation(evaluation);
+                
+                classification = {
+                  classification: evaluation.label.toLowerCase(),
+                  label: evaluation.label,
+                  cpLoss: evaluation.cpl || 0,
+                  color: badge.color,
+                  isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
+                  brilliantAnalysis: evaluation.brilliantInfo || null,
+                  fullEvaluation: evaluation
+                };
+                
+                // Use evaluation from backend
+                evaluationAfterMove = evaluation.raw?.eval_after_struct || { 
+                  type: 'cp', 
+                  value: evaluation.evalAfter || 0 
+                };
+                
+                console.log('📊 Classification applied:', classification);
+              })
+              .catch(e => {
+                console.error('❌ Backend evaluation error:', e);
+                classification = {
+                  classification: 'good',
+                  label: 'Good',
+                  cpLoss: 0,
+                  color: '#96af8b',
+                  isBrilliantV2: false
+                };
+                explanation = 'Move classification unavailable - backend error';
+              })
+          );
+        }
+        
+        // Wait for BOTH to complete (runs in parallel!)
+        console.log('⚡ Running analysis and classification in parallel...');
+        await Promise.all(promises);
+        console.log('✅ Both operations complete!');
+        
+        // Set results
+        if (result) {
+          bestMoveForNewPosition = result.lines[0]?.pv[0];
+          setStoredAnalysis(result);
+          setCurrentEval(evaluationAfterMove || result.evaluation);
+          setEngineLines(result.lines || []);
+        }
       } else {
         // Game over - set terminal evaluation
         console.log('🏁 Game ended with this move');
@@ -189,51 +255,6 @@ export default function Analysis({ initialFen, onEditPosition }) {
         setStoredAnalysis(null);
       }
 
-      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a', isBrilliantV2: false };
-      let explanation = null;
-
-      if (previousAnalysis?.lines?.length) {
-        try {
-          const movePlayed = move.from + move.to + (move.promotion || '');
-
-          // Use backend evaluation service for move classification
-          console.log('🔍 Calling backend /evaluate for move:', movePlayed);
-          const evaluation = await evaluateMove(previousFen, movePlayed, analysisDepth, 5);
-
-          console.log('✅ Backend evaluation result:', evaluation);
-
-          // Get badge info (label, color, symbol)
-          const badge = getMoveBadge(evaluation);
-
-          // Get explanation text
-          explanation = getMoveExplanation(evaluation);
-
-          // Build classification object compatible with UI
-          classification = {
-            classification: evaluation.label.toLowerCase(),
-            label: evaluation.label,
-            cpLoss: evaluation.cpl || 0,
-            color: badge.color,
-            isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
-            brilliantAnalysis: evaluation.brilliantInfo || null
-          };
-
-          console.log('📊 Classification applied:', classification);
-
-        } catch (e) {
-          console.error('❌ Backend evaluation error:', e);
-          // Fallback to basic classification
-          classification = {
-            classification: 'good',
-            label: 'Good',
-            cpLoss: 0,
-            color: '#96af8b',
-            isBrilliantV2: false
-          };
-          explanation = 'Move classification unavailable - backend error';
-        }
-      }
-
       const newMove = {
         ...move,
         evaluation: result?.evaluation || null,
@@ -242,7 +263,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
         cpLoss: classification.cpLoss,
         isBrilliantV2: classification.isBrilliantV2,
         brilliantAnalysis: classification.brilliantAnalysis,
-        explanation: explanation
+        explanation: explanation,
+        // Store full backend evaluation data
+        fullEvaluation: classification.fullEvaluation || null
       };
 
       // Debug logging
@@ -358,7 +381,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
           cpLoss: currentMove.cpLoss,
           color: getClassificationColor(currentMove.classification),
           isBrilliantV2: currentMove.isBrilliantV2,
-          brilliantAnalysis: currentMove.brilliantAnalysis
+          brilliantAnalysis: currentMove.brilliantAnalysis,
+          fullEvaluation: currentMove.fullEvaluation // Preserve full evaluation data
         });
         // Set last move for highlighting
         setLastMove({ from: currentMove.from, to: currentMove.to });
@@ -500,9 +524,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
             onChange={(e) => setAnalysisDepth(Number(e.target.value))}
             className="rounded-lg border-2 border-slate-200 bg-white px-3 py-2 font-semibold"
           >
-            <option value={10}>Depth 10 (Fast)</option>
-            <option value={15}>Depth 15 (Normal)</option>
-            <option value={20}>Depth 20 (Deep)</option>
+            <option value={12}>Depth 12 (⚡ Fastest ~0.5s)</option>
+            <option value={15}>Depth 15 (🚀 Fast ~1s)</option>
+            <option value={18}>Depth 18 (⚖️ Balanced ~2s)</option>
+            <option value={20}>Depth 20 (🎯 Deep ~4s)</option>
+            <option value={22}>Depth 22 (🧠 Expert ~8s)</option>
           </select>
 
           <div className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5
@@ -632,6 +658,13 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
         {/* Right panel (sticky) */}
         <div className="sticky top-4 w-[420px] flex-shrink-0 space-y-3">
+          {/* Move Details Panel - shows all backend evaluation data */}
+          {currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
+            <MoveDetailsPanel 
+              moveData={moves[currentMoveIndex].fullEvaluation}
+              visible={true}
+            />
+          )}
           {/* Classification - show loading while processing or actual classification */}
           {(isProcessingMove || lastMoveClassification) && (
             <div className="flex min-h-[112px] items-center rounded-xl border border-slate-200 bg-white p-4 shadow transition-all duration-200">
@@ -793,7 +826,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
           </div>
 
           {/* Engine lines */}
-          <div className="h-[280px] overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow">
+          <div className="rounded-xl border border-slate-200 bg-white shadow overflow-hidden">
+            <div className="bg-slate-100 border-b border-slate-200 px-4 py-2">
+              <div className="text-sm font-bold text-slate-700">🎯 Engine Analysis</div>
+            </div>
+            <div className="h-[240px] overflow-auto p-4">
             {isGameOver ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
@@ -831,6 +868,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 onLineHover={setHoverMove}
               />
             )}
+            </div>
           </div>
 
           {/* Move history */}

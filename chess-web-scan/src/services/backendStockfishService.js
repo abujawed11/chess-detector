@@ -120,26 +120,21 @@ class BackendStockfishService {
 
       const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
       console.log(`✅ Backend analysis complete in ${elapsedTime}s`);
+      console.log('📦 Backend response:', {
+        evaluation: data.evaluation,
+        linesCount: data.lines?.length,
+        bestMove: data.bestMove
+      });
 
-      // Convert backend response to match frontend expectations
-      const lines = (data.analysis || []).map((item, index) => ({
-        multipv: item.multipv || (index + 1),
-        score: item.score,
-        evaluation: item.score,
-        pv: item.pv || [],
-        cp: item.score?.type === 'cp' ? item.score.value : undefined,
-        depth: depth
-      }));
-
-      const bestMove = lines[0]?.pv?.[0] || null;
-      const evaluation = lines[0]?.score || null;
-
+      // Backend now returns frontend-compatible format directly
+      // { evaluation, lines, depth, bestMove }
       this.analyzing = false;
 
       return {
-        bestMove,
-        evaluation,
-        lines
+        bestMove: data.bestMove || data.lines?.[0]?.pv?.[0] || null,
+        evaluation: data.evaluation || null,
+        lines: data.lines || [],
+        depth: data.depth || depth
       };
     } catch (error) {
       this.analyzing = false;
