@@ -467,9 +467,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
     : null;
 
   return (
-    <div className="mx-auto max-w-[1600px] p-5 text-slate-900">
+    <div className="mx-auto max-w-[1900px] px-4 py-5 text-slate-900">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="m-0 mb-2 text-2xl font-bold tracking-tight">Position Analysis</h2>
           <div className={`inline-flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm
@@ -575,16 +575,18 @@ export default function Analysis({ initialFen, onEditPosition }) {
         </div>
       </div>
 
-      {/* Main layout: flex with fixed widths = no shifting */}
-      <div className="flex items-start gap-5">
-        {/* Evaluation bar (fixed width) */}
-        <div className="w-10">
-          <EvaluationBar score={currentEval} fen={currentFen} height={560} />
-        </div>
+      {/* Main layout: flex with optimized spacing */}
+      <div className="flex flex-col items-center gap-5 xl:flex-row xl:items-start xl:justify-center">
+        {/* Left side: Evaluation bar + Board */}
+        <div className="flex items-start gap-4">
+          {/* Evaluation bar */}
+          <div className="w-12 flex-shrink-0">
+            <EvaluationBar score={currentEval} fen={currentFen} height={680} />
+          </div>
 
-        {/* Board column */}
-        <div className="flex min-h-[620px] flex-col gap-3">
-          <div className="relative h-[560px] w-[560px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow">
+          {/* Board column */}
+          <div className="flex flex-col gap-3">
+            <div className="relative flex items-center justify-center">
             <InteractiveBoard
               fen={currentFen}
               onMove={handleMove}
@@ -594,19 +596,17 @@ export default function Analysis({ initialFen, onEditPosition }) {
               lastMove={lastMove}
             />
             {!initialized && (
-              <div className="absolute inset-0 bg-slate-100">
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-green-600" />
-                    <div className="text-sm font-semibold text-slate-600">Loading engine...</div>
-                  </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-100/95 rounded-xl">
+                <div className="text-center">
+                  <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-green-600 mx-auto" />
+                  <div className="text-sm font-semibold text-slate-600">Loading engine...</div>
                 </div>
               </div>
             )}
           </div>
 
           {/* Move navigation */}
-          <div className="flex justify-center gap-2">
+          <div className="flex w-[680px] justify-center gap-2">
             <button
               onClick={() => navigateToMove(-1)}
               disabled={currentMoveIndex === -1}
@@ -643,7 +643,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           {/* Move Explanation Card - appears below navigation */}
           {currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
-            <div className="mt-4">
+            <div className="w-[680px]">
               <MoveExplanationCard
                 moveNumber={currentMoveIndex + 1}
                 playerName={currentMoveIndex % 2 === 0 ? 'White' : 'Black'}
@@ -654,10 +654,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
               />
             </div>
           )}
+          </div>
         </div>
 
-        {/* Right panel (sticky) */}
-        <div className="sticky top-4 w-[420px] flex-shrink-0 space-y-3">
+        {/* Right panel */}
+        <div className="w-full max-w-[460px] space-y-3 xl:sticky xl:top-4 xl:w-[460px] xl:flex-shrink-0">
           {/* Move Details Panel - shows all backend evaluation data */}
           {currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
             <MoveDetailsPanel 
@@ -667,7 +668,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
           )}
           {/* Classification - show loading while processing or actual classification */}
           {(isProcessingMove || lastMoveClassification) && (
-            <div className="flex min-h-[112px] items-center rounded-xl border border-slate-200 bg-white p-4 shadow transition-all duration-200">
+            <div className="flex min-h-[90px] items-center rounded-xl border border-slate-200 bg-white p-3 shadow transition-all duration-200">
               {isProcessingMove ? (
                 <div className="w-full space-y-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
@@ -678,16 +679,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 </div>
               ) : (
                 <div
-                  className="w-full rounded-xl border-4 bg-white p-3"
+                  className="w-full rounded-lg border-4 bg-white p-2.5"
                   style={{ borderColor: lastMoveClassification.color }}
                 >
                   <div
-                    className="mb-1 text-lg font-extrabold"
+                    className="mb-0.5 text-lg font-extrabold"
                     style={{ color: lastMoveClassification.color }}
                   >
                     {lastMoveClassification.label}
                   </div>
-                  <div className="text-sm text-slate-600">
+                  <div className="text-xs text-slate-600">
                     Centipawn loss: {lastMoveClassification.cpLoss.toFixed(0)}
                   </div>
                 </div>
@@ -768,31 +769,31 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           {/* Best move - only show when available */}
           {bestMove && (
-            <div className="flex min-h-[112px] items-center rounded-xl border-2 border-green-200 bg-gradient-to-br from-green-50 to-green-100 p-4 shadow transition-all duration-200">
+            <div className="flex min-h-[90px] items-center rounded-xl border-2 border-green-200 bg-gradient-to-br from-green-50 to-green-100 p-3 shadow transition-all duration-200">
               <div className="w-full">
-                <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold">
                   <span>🎯 Best Move</span>
                   <span className="rounded-md bg-green-600 px-2 py-0.5 text-xs font-extrabold text-white">
-                    See arrow on board ➜
+                    See arrow ➜
                   </span>
                 </div>
-                <div className="font-mono text-2xl font-extrabold text-green-700">
+                <div className="font-mono text-xl font-extrabold text-green-700">
                   {bestMove}
                 </div>
-                <div className="mt-0.5 text-xs font-semibold italic text-green-800">
-                  Green arrow with subtle pulse
+                <div className="mt-0.5 text-xs font-medium italic text-green-800">
+                  Green arrow on board
                 </div>
               </div>
             </div>
           )}
 
           {/* Current eval - always visible */}
-          <div className="flex min-h-[100px] items-center rounded-xl border border-slate-200 bg-white p-4 shadow transition-all duration-200">
+          <div className="flex min-h-[80px] items-center rounded-xl border border-slate-200 bg-white p-3 shadow transition-all duration-200">
             {isGameOver ? (
               <div className="w-full">
-                <div className="mb-1 text-sm font-bold text-slate-700">Game Status</div>
+                <div className="mb-1 text-xs font-bold text-slate-700">Game Status</div>
                 <div className={`
-                  text-lg font-extrabold
+                  text-base font-extrabold
                   ${gameOverState.isCheckmate ? 'text-red-700' : 'text-amber-600'}
                 `}>
                   {gameOverState.isCheckmate && '♔ '}
@@ -801,14 +802,14 @@ export default function Analysis({ initialFen, onEditPosition }) {
               </div>
             ) : !currentEval ? (
               <div className="w-full space-y-2">
-                <div className="h-4 w-24 animate-pulse rounded bg-slate-300" />
-                <div className="h-6 w-32 animate-pulse rounded bg-slate-300" />
+                <div className="h-3 w-20 animate-pulse rounded bg-slate-300" />
+                <div className="h-5 w-28 animate-pulse rounded bg-slate-300" />
               </div>
             ) : (
               <div className="w-full">
-                <div className="mb-1 text-sm font-bold text-slate-700">Evaluation</div>
+                <div className="mb-1 text-xs font-bold text-slate-700">Evaluation</div>
                 <div className={`
-                  font-mono text-lg font-extrabold
+                  font-mono text-base font-extrabold
                   ${currentEval.type === 'mate'
                     ? 'text-red-700'
                     : currentEval.value > 0
@@ -830,7 +831,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
             <div className="bg-slate-100 border-b border-slate-200 px-4 py-2">
               <div className="text-sm font-bold text-slate-700">🎯 Engine Analysis</div>
             </div>
-            <div className="h-[240px] overflow-auto p-4">
+            <div className="max-h-[300px] min-h-[200px] overflow-auto p-4">
             {isGameOver ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
@@ -872,7 +873,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
           </div>
 
           {/* Move history */}
-          <div className="max-h-[260px] overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow">
+          <div className="max-h-[300px] min-h-[200px] overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow">
             <MoveHistory
               moves={moves}
               currentMoveIndex={currentMoveIndex}
@@ -883,7 +884,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       </div>
 
       {/* Tips */}
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow">
         <strong>💡 How to use:</strong>
         <ul className="ml-5 mt-2 list-disc space-y-1">
           <li><strong>Auto-analyze</strong> classifies moves as you play.</li>
