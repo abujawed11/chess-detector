@@ -1841,6 +1841,7 @@ export default function PGNAnalysis() {
   const [playSpeed, setPlaySpeed] = useState(1500);
   const [moveBadge, setMoveBadge] = useState(null); // { square, classification, label, color, symbol }
   const [lastMove, setLastMove] = useState(null);   // { from, to }
+  const [analysisDepth, setAnalysisDepth] = useState(18); // Stockfish analysis depth
 
   const fileInputRef = useRef(null);
   const playIntervalRef = useRef(null);
@@ -1948,7 +1949,7 @@ export default function PGNAnalysis() {
         const uciMove = move.from + move.to + (move.promotion || '');
 
         try {
-          const evaluation = await evaluateMove(fen, uciMove, 18, 5);
+          const evaluation = await evaluateMove(fen, uciMove, analysisDepth, 5);
           const badge = getMoveBadge(evaluation);
 
           analyzed.push({
@@ -2002,7 +2003,7 @@ export default function PGNAnalysis() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [game, initialized, stopEngine]);
+  }, [game, initialized, stopEngine, analysisDepth]);
 
   const navigateToMove = useCallback(
     (index) => {
@@ -2685,13 +2686,31 @@ export default function PGNAnalysis() {
             Ready to analyze{' '}
             <strong className="text-purple-600">{moves.length}</strong> moves
           </p>
+
+          {/* Depth Selection */}
+          <div className="mb-4 flex items-center justify-center gap-3">
+            <label className="text-sm font-semibold text-slate-700">
+              Analysis Depth:
+            </label>
+            <select
+              value={analysisDepth}
+              onChange={(e) => setAnalysisDepth(Number(e.target.value))}
+              className="rounded-lg border-2 border-purple-300 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm transition hover:border-purple-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+            >
+              <option value={15}>15 (Fast)</option>
+              <option value={18}>18 (Balanced)</option>
+              <option value={20}>20 (Deep)</option>
+              <option value={22}>22 (Very Deep)</option>
+            </select>
+          </div>
+
           <p className="mb-4 text-sm text-slate-700">
             ⏱️ Estimated time:{' '}
             <strong className="text-purple-600">
-              {Math.round((moves.length * 8) / 60)}–
-              {Math.round((moves.length * 12) / 60)} minutes
+              {Math.round((moves.length * (analysisDepth === 15 ? 5 : analysisDepth === 18 ? 8 : analysisDepth === 20 ? 12 : 15)) / 60)}–
+              {Math.round((moves.length * (analysisDepth === 15 ? 8 : analysisDepth === 18 ? 12 : analysisDepth === 20 ? 18 : 22)) / 60)} minutes
             </strong>{' '}
-            (depth 12)
+            (depth {analysisDepth})
           </p>
           <button
             onClick={analyzeGame}
@@ -2728,6 +2747,9 @@ export default function PGNAnalysis() {
           <p className="mt-2 text-xs font-medium text-slate-700">
             ⚡ This may take a few minutes. Check console (F12) for detailed
             progress.
+          </p>
+          <p className="mt-1 text-xs font-medium text-slate-600">
+            📊 Using depth: <strong className="text-purple-600">{analysisDepth}</strong>
           </p>
         </div>
       )}

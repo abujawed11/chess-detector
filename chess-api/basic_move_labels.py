@@ -759,7 +759,7 @@ class SacrificeParams:
     All values are in centipawns.
     """
     # Min *net* loss (after capture + ideal recapture) to treat as real sac
-    net_loss_threshold_cp: int = 250   # ~ minor piece or better
+    net_loss_threshold_cp: int = 180   # ~ minor piece or better
 
     # Min face value of the offered piece (don’t call pawn nudges “sacs”)
     min_offered_piece_cp: int = 200    # tune if you want pawn sacs
@@ -807,8 +807,32 @@ def detect_sacrifice(
     mover_color = board.turn
     opponent_color = not mover_color
 
+    # --- determine what is captured BEFORE move is applied ---
+    captured_cp = 0
+    moving_piece = board.piece_at(move.from_square)
+
+    if moving_piece is None:
+        return SacrificeResult(
+            is_real_sacrifice=False,
+            worst_net_loss_cp=0,
+            had_accepting_capture=False,
+            offered_piece_cp=0,
+            num_attackers_opponent=0,
+            num_attackers_mover=0,
+        )
+
+    if board.is_capture(move):
+        if board.is_en_passant(move):
+            captured_cp = PIECE_VALUES[chess.PAWN]
+        else:
+            captured_piece = board.piece_at(move.to_square)
+            if captured_piece and captured_piece.color == opponent_color:
+                captured_cp = PIECE_VALUES.get(captured_piece.piece_type, 0)
+
+    
+
     # Position before move (for logging only)
-    material_before = material_for_color(board, mover_color)
+    # material_before = material_for_color(board, mover_color)
 
     # Apply our move: now it's opponent's turn
     b1 = board.copy(stack=False)
@@ -837,9 +861,31 @@ def detect_sacrifice(
             num_attackers_mover=0,
         )
 
+    # offered_piece_cp = PIECE_VALUES.get(piece.piece_type, 0)
+
+
+
+
+    # if offered_piece_cp < params.min_offered_piece_cp:
+    #     # too small to care (you can lower this to include pawn sacs)
+    #     return SacrificeResult(
+    #         is_real_sacrifice=False,
+    #         worst_net_loss_cp=0,
+    #         had_accepting_capture=False,
+    #         offered_piece_cp=offered_piece_cp,
+    #         num_attackers_opponent=0,
+    #         num_attackers_mover=0,
+    #     )
+
     offered_piece_cp = PIECE_VALUES.get(piece.piece_type, 0)
-    if offered_piece_cp < params.min_offered_piece_cp:
-        # too small to care (you can lower this to include pawn sacs)
+
+    # How much net material are we really putting at risk,
+    # after accounting for the piece we just captured?
+    risk_face_cp = max(0, offered_piece_cp - captured_cp)
+
+    # If risk_face_cp is small, don’t treat this as a sacrifice.
+    # This kills cases like QxQ where captured_cp == offered_piece_cp.
+    if risk_face_cp < params.min_offered_piece_cp:
         return SacrificeResult(
             is_real_sacrifice=False,
             worst_net_loss_cp=0,
@@ -848,6 +894,7 @@ def detect_sacrifice(
             num_attackers_opponent=0,
             num_attackers_mover=0,
         )
+
 
     # Attackers after our move
     attackers_opponent = list(b1.attackers(opponent_color, target_sq))
@@ -892,15 +939,24 @@ def detect_sacrifice(
         # Do we have any defenders at all?
         has_defender = num_attackers_mover > 0
 
+        # if not has_defender:
+        #     # If no one can recapture, we lose the *full* piece value
+        #     net_loss = offered_piece_cp
+        # else:
+        #     # If we *can* recapture:
+        #     #   Queen taken by queen => net_loss ~ 0 (swap queens)
+        #     #   Queen taken by rook  => net_loss ~ 900 - 500 = 400 (real sac)
+        #     #   Rook taken by bishop => net_loss ~ 500 - 300 = 200 (maybe sac)
+        #     net_loss = offered_piece_cp - attacker_val
+
         if not has_defender:
-            # If no one can recapture, we lose the *full* piece value
-            net_loss = offered_piece_cp
+            # We can lose *all* of the risked material
+            net_loss = risk_face_cp
         else:
-            # If we *can* recapture:
-            #   Queen taken by queen => net_loss ~ 0 (swap queens)
-            #   Queen taken by rook  => net_loss ~ 900 - 500 = 400 (real sac)
-            #   Rook taken by bishop => net_loss ~ 500 - 300 = 200 (maybe sac)
-            net_loss = offered_piece_cp - attacker_val
+            # We lose risk_face_cp but may get attacker back.
+            # Rough approximation: net loss = risk - attacker_val
+            net_loss = risk_face_cp - attacker_val
+
 
         if net_loss > worst_net_loss:
             worst_net_loss = net_loss
@@ -913,6 +969,8 @@ def detect_sacrifice(
     print("SAC DEBUG:", {
         "move": move.uci(),
         "offered_piece_cp": offered_piece_cp,
+        "captured_cp": captured_cp,
+        "risk_face_cp": risk_face_cp,
         "num_attackers_opponent": num_attackers_opponent,
         "num_attackers_mover": num_attackers_mover,
         "worst_net_loss_cp": worst_net_loss,
@@ -1650,6 +1708,7 @@ class SacBrilliancyParams:
     - After opponent's BEST REPLY, mover is clearly better
     - Even if opponent ACCEPTS the sac, mover is clearly better
     - Engine does not hate the move (close enough to best from PRE)
+    - NEW: The move does not throw away too much advantage (max_adv_drop_cp)
     """
     # How good the mover must be AFTER opponent's best reply
     win_after_reply_cp: int = 120   # ≈ +1.2 pawn advantage
@@ -1659,6 +1718,10 @@ class SacBrilliancyParams:
 
     # How far from engine best we allow the sac move to be (from PRE)
     max_gap_to_best_cp: int = 120   # ≈ 1.2 pawns
+
+    # NEW: maximum drop in the mover's advantage we tolerate
+    # (adv_before_mover - adv_after_best_reply) ≤ max_adv_drop_cp
+    max_adv_drop_cp: int = 80       # ≈ 0.8 pawn drop allowed
 
 
 @dataclass
@@ -1689,7 +1752,7 @@ def detect_sac_brilliancy(
     eval_best_reply_white: float,
     eval_accept_white: Optional[float],
     mover_color: str,         # 'w' or 'b'
-    sac_result: SacrificeResult,
+    sac_result: "SacrificeResult",
     params: Optional[SacBrilliancyParams] = None,
 ) -> SacBrilliancyResult:
     """
@@ -1699,42 +1762,51 @@ def detect_sac_brilliancy(
       - After opponent's BEST reply (whether he takes or not), mover is clearly better
       - Even if opponent ACCEPTS the sac, mover is still clearly better
       - Engine does not hate the sac (gap to best small)
+      - NEW: Mover does not throw away too much of their advantage
 
     All eval_* are from WHITE POV.
     """
     if params is None:
         params = SacBrilliancyParams()
 
+    # -----------------------------------------------------------------------
     # 0) Must be a real sacrifice
+    # -----------------------------------------------------------------------
     if not sac_result.is_real_sacrifice:
         return SacBrilliancyResult(
             is_brilliant=False,
             reason="not_sacrifice",
             adv_before_mover=adv_for_mover(eval_before_white, mover_color),
             adv_after_best_reply=adv_for_mover(eval_best_reply_white, mover_color),
-            adv_after_accept=None,
+            adv_after_accept=None if eval_accept_white is None else adv_for_mover(eval_accept_white, mover_color),
             gap_to_best_cp=None,
             is_real_sacrifice=False,
         )
 
+    # -----------------------------------------------------------------------
     # 1) Convert evals to "advantage for mover"
+    # -----------------------------------------------------------------------
     adv_before_mover = adv_for_mover(eval_before_white, mover_color)
     adv_after_reply  = adv_for_mover(eval_best_reply_white, mover_color)
 
-    adv_after_accept = None
+    adv_after_accept: Optional[float] = None
     if eval_accept_white is not None:
         adv_after_accept = adv_for_mover(eval_accept_white, mover_color)
 
-    # 2) Engine gap-to-best from PRE
-    gap_to_best = None
+    # -----------------------------------------------------------------------
+    # 2) Engine gap-to-best from PRE (CPL-style)
+    # -----------------------------------------------------------------------
+    gap_to_best: Optional[float] = None
     if eval_best_pre_white is not None:
+        # If the caller didn't give a separate "played from PRE" eval, fall back
+        # to eval_after_white (still from White POV)
         played_pre = eval_played_pre_white if eval_played_pre_white is not None else eval_after_white
 
         if mover_color == 'w':
             # For White: gap = best - played (positive => our move is worse)
             gap_to_best = eval_best_pre_white - played_pre
         else:
-            # For Black: more negative eval is better.
+            # For Black: more negative eval is better for us.
             # best_eval_white < played_eval_white -> our move is worse for Black
             gap_to_best = played_pre - eval_best_pre_white
 
@@ -1742,31 +1814,48 @@ def detect_sac_brilliancy(
     if gap_to_best is not None:
         gap_ok = (gap_to_best <= params.max_gap_to_best_cp)
 
-    # 3) Mover must be clearly better after best reply
+    # -----------------------------------------------------------------------
+    # 3) NEW: advantage drop constraint (how much did we worsen?)
+    # -----------------------------------------------------------------------
+    # Positive adv_drop means our position got worse for the mover.
+    adv_drop = adv_before_mover - adv_after_reply
+
+    drop_ok = True
+    # Only apply the drop constraint if we were already clearly winning.
+    if adv_before_mover > params.win_after_reply_cp:
+        drop_ok = (adv_drop <= params.max_adv_drop_cp)
+
+    # -----------------------------------------------------------------------
+    # 4) Basic win/draw conditions for the sac
+    # -----------------------------------------------------------------------
+    # Mover must be clearly better after best reply
     win_after_reply_ok = (adv_after_reply >= params.win_after_reply_cp)
 
-    # 4) Mover must be clearly better even after ACCEPTING the sac
+    # Mover must be clearly better even after ACCEPTING the sac
     if eval_accept_white is not None:
         win_after_accept_ok = (adv_after_accept >= params.win_after_accept_cp)
     else:
         # If no accepting capture exists, don't require this condition
         win_after_accept_ok = True
 
-        # --- NEW: thresholds for draw-rescue brilliance ---
+    # --- thresholds for draw-rescue brilliance ---
     lost_threshold_cp = 300   # ≥ 3 pawns worse = clearly lost
     draw_band_cp      = 60    # |cp| ≤ 0.6 pawn = essentially draw
 
-
-    
-    # 5a) Mode 1: winning sac brilliancy (existing)
+    # -----------------------------------------------------------------------
+    # 5a) Mode 1: winning sac brilliancy (existing + new drop_ok)
+    # -----------------------------------------------------------------------
     winning_sac = (
         sac_result.is_real_sacrifice
         and win_after_reply_ok
         and win_after_accept_ok
         and gap_ok
+        and drop_ok
     )
 
+    # -----------------------------------------------------------------------
     # 5b) Mode 2: draw-rescue sac brilliancy
+    # -----------------------------------------------------------------------
     draw_rescue_sac = (
         sac_result.is_real_sacrifice
         and adv_before_mover <= -lost_threshold_cp           # we were lost
@@ -1775,6 +1864,9 @@ def detect_sac_brilliancy(
         and gap_ok
     )
 
+    # -----------------------------------------------------------------------
+    # 6) Final decision + reason
+    # -----------------------------------------------------------------------
     is_brilliant = winning_sac or draw_rescue_sac
 
     if winning_sac:
@@ -1788,28 +1880,10 @@ def detect_sac_brilliancy(
             reason = "not_winning_after_accept"
         elif not gap_ok:
             reason = "engine_hates_sac"
+        elif not drop_ok:
+            reason = "too_much_advantage_lost"
         else:
             reason = "unknown_fail"
-
-    # 5) Combine all conditions
-    # is_brilliant = (
-    #     sac_result.is_real_sacrifice
-    #     and win_after_reply_ok
-    #     and win_after_accept_ok
-    #     and gap_ok
-    # )
-
-    # if is_brilliant:
-    #     reason = "real_sac_and_still_winning"
-    # else:
-    #     if not win_after_reply_ok:
-    #         reason = "not_winning_after_best_reply"
-    #     elif eval_accept_white is not None and not win_after_accept_ok:
-    #         reason = "not_winning_after_accept"
-    #     elif not gap_ok:
-    #         reason = "engine_hates_sac"
-    #     else:
-    #         reason = "unknown_fail"
 
     print("BRILL DEBUG (SAC-BASED):", {
         "mover_color": mover_color,
@@ -1817,10 +1891,12 @@ def detect_sac_brilliancy(
         "adv_after_best_reply": adv_after_reply,
         "adv_after_accept": adv_after_accept,
         "gap_to_best_cp": gap_to_best,
+        "adv_drop": adv_drop,
         "is_real_sacrifice": sac_result.is_real_sacrifice,
         "win_after_reply_ok": win_after_reply_ok,
         "win_after_accept_ok": win_after_accept_ok,
         "gap_ok": gap_ok,
+        "drop_ok": drop_ok,
         "is_brilliant": is_brilliant,
         "reason": reason,
     })
@@ -1834,3 +1910,215 @@ def detect_sac_brilliancy(
         gap_to_best_cp=gap_to_best,
         is_real_sacrifice=sac_result.is_real_sacrifice,
     )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @dataclass
+# class SacBrilliancyParams:
+#     """
+#     Tunables for sacrifice-based brilliancy (your definition):
+
+#     - Move is a REAL sacrifice (detect_sacrifice says so)
+#     - After opponent's BEST REPLY, mover is clearly better
+#     - Even if opponent ACCEPTS the sac, mover is clearly better
+#     - Engine does not hate the move (close enough to best from PRE)
+#     """
+#     # How good the mover must be AFTER opponent's best reply
+#     win_after_reply_cp: int = 120   # ≈ +1.2 pawn advantage
+
+#     # How good the mover must be even if opponent ACCEPTS the sac
+#     win_after_accept_cp: int = 80   # ≈ +0.8 pawn advantage
+
+#     # How far from engine best we allow the sac move to be (from PRE)
+#     max_gap_to_best_cp: int = 120   # ≈ 1.2 pawns
+
+#     # NEW: how much advantage you're allowed to lose and still call it brilliant
+#     max_adv_drop_cp: int = 80       # ≈ 0.8 pawn drop
+
+
+# @dataclass
+# class SacBrilliancyResult:
+#     is_brilliant: bool
+#     reason: str
+#     adv_before_mover: float
+#     adv_after_best_reply: float
+#     adv_after_accept: Optional[float]
+#     gap_to_best_cp: Optional[float]
+#     is_real_sacrifice: bool
+
+
+# def adv_for_mover(eval_white_cp: float, mover_color: str) -> float:
+#     """
+#     Convert White-POV eval into 'advantage for mover', without changing your
+#     internal White-only eval model.
+#     """
+#     return eval_white_cp if mover_color == "w" else -eval_white_cp
+
+
+# def detect_sac_brilliancy(
+#     *,
+#     eval_before_white: float,
+#     eval_after_white: float,
+#     eval_best_pre_white: Optional[float],
+#     eval_played_pre_white: Optional[float],
+#     eval_best_reply_white: float,
+#     eval_accept_white: Optional[float],
+#     mover_color: str,         # 'w' or 'b'
+#     sac_result: SacrificeResult,
+#     params: Optional[SacBrilliancyParams] = None,
+# ) -> SacBrilliancyResult:
+#     """
+#     NEW brilliancy logic that matches your verbal definition:
+
+#       - Mover plays a REAL sacrifice (piece hangs with no backup and net material loss)
+#       - After opponent's BEST reply (whether he takes or not), mover is clearly better
+#       - Even if opponent ACCEPTS the sac, mover is still clearly better
+#       - Engine does not hate the sac (gap to best small)
+
+#     All eval_* are from WHITE POV.
+#     """
+#     if params is None:
+#         params = SacBrilliancyParams()
+
+#     # 0) Must be a real sacrifice
+#     if not sac_result.is_real_sacrifice:
+#         return SacBrilliancyResult(
+#             is_brilliant=False,
+#             reason="not_sacrifice",
+#             adv_before_mover=adv_for_mover(eval_before_white, mover_color),
+#             adv_after_best_reply=adv_for_mover(eval_best_reply_white, mover_color),
+#             adv_after_accept=None,
+#             gap_to_best_cp=None,
+#             is_real_sacrifice=False,
+#         )
+
+#     # 1) Convert evals to "advantage for mover"
+#     adv_before_mover = adv_for_mover(eval_before_white, mover_color)
+#     adv_after_reply  = adv_for_mover(eval_best_reply_white, mover_color)
+
+#     adv_after_accept = None
+#     if eval_accept_white is not None:
+#         adv_after_accept = adv_for_mover(eval_accept_white, mover_color)
+
+#     # 2) Engine gap-to-best from PRE
+#     gap_to_best = None
+#     if eval_best_pre_white is not None:
+#         played_pre = eval_played_pre_white if eval_played_pre_white is not None else eval_after_white
+
+#         if mover_color == 'w':
+#             # For White: gap = best - played (positive => our move is worse)
+#             gap_to_best = eval_best_pre_white - played_pre
+#         else:
+#             # For Black: more negative eval is better.
+#             # best_eval_white < played_eval_white -> our move is worse for Black
+#             gap_to_best = played_pre - eval_best_pre_white
+
+#     gap_ok = True
+#     if gap_to_best is not None:
+#         gap_ok = (gap_to_best <= params.max_gap_to_best_cp)
+
+#     # 3) Mover must be clearly better after best reply
+#     win_after_reply_ok = (adv_after_reply >= params.win_after_reply_cp)
+
+#     # 4) Mover must be clearly better even after ACCEPTING the sac
+#     if eval_accept_white is not None:
+#         win_after_accept_ok = (adv_after_accept >= params.win_after_accept_cp)
+#     else:
+#         # If no accepting capture exists, don't require this condition
+#         win_after_accept_ok = True
+
+#         # --- NEW: thresholds for draw-rescue brilliance ---
+#     lost_threshold_cp = 300   # ≥ 3 pawns worse = clearly lost
+#     draw_band_cp      = 60    # |cp| ≤ 0.6 pawn = essentially draw
+
+
+    
+#     # 5a) Mode 1: winning sac brilliancy (existing)
+#     winning_sac = (
+#         sac_result.is_real_sacrifice
+#         and win_after_reply_ok
+#         and win_after_accept_ok
+#         and gap_ok
+#     )
+
+#     # 5b) Mode 2: draw-rescue sac brilliancy
+#     draw_rescue_sac = (
+#         sac_result.is_real_sacrifice
+#         and adv_before_mover <= -lost_threshold_cp           # we were lost
+#         and abs(adv_after_reply) <= draw_band_cp             # now it's drawn
+#         and (adv_after_accept is None or abs(adv_after_accept) <= draw_band_cp)
+#         and gap_ok
+#     )
+
+#     is_brilliant = winning_sac or draw_rescue_sac
+
+#     if winning_sac:
+#         reason = "real_sac_and_still_winning"
+#     elif draw_rescue_sac:
+#         reason = "real_sac_draw_rescue"
+#     else:
+#         if not win_after_reply_ok and not draw_rescue_sac:
+#             reason = "not_winning_or_drawing_after_best_reply"
+#         elif eval_accept_white is not None and not win_after_accept_ok:
+#             reason = "not_winning_after_accept"
+#         elif not gap_ok:
+#             reason = "engine_hates_sac"
+#         else:
+#             reason = "unknown_fail"
+
+#     # 5) Combine all conditions
+#     # is_brilliant = (
+#     #     sac_result.is_real_sacrifice
+#     #     and win_after_reply_ok
+#     #     and win_after_accept_ok
+#     #     and gap_ok
+#     # )
+
+#     # if is_brilliant:
+#     #     reason = "real_sac_and_still_winning"
+#     # else:
+#     #     if not win_after_reply_ok:
+#     #         reason = "not_winning_after_best_reply"
+#     #     elif eval_accept_white is not None and not win_after_accept_ok:
+#     #         reason = "not_winning_after_accept"
+#     #     elif not gap_ok:
+#     #         reason = "engine_hates_sac"
+#     #     else:
+#     #         reason = "unknown_fail"
+
+#     print("BRILL DEBUG (SAC-BASED):", {
+#         "mover_color": mover_color,
+#         "adv_before_mover": adv_before_mover,
+#         "adv_after_best_reply": adv_after_reply,
+#         "adv_after_accept": adv_after_accept,
+#         "gap_to_best_cp": gap_to_best,
+#         "is_real_sacrifice": sac_result.is_real_sacrifice,
+#         "win_after_reply_ok": win_after_reply_ok,
+#         "win_after_accept_ok": win_after_accept_ok,
+#         "gap_ok": gap_ok,
+#         "is_brilliant": is_brilliant,
+#         "reason": reason,
+#     })
+
+#     return SacBrilliancyResult(
+#         is_brilliant=is_brilliant,
+#         reason=reason,
+#         adv_before_mover=adv_before_mover,
+#         adv_after_best_reply=adv_after_reply,
+#         adv_after_accept=adv_after_accept,
+#         gap_to_best_cp=gap_to_best,
+#         is_real_sacrifice=sac_result.is_real_sacrifice,
+#     )
