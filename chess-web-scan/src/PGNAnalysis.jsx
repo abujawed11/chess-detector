@@ -1842,6 +1842,7 @@ export default function PGNAnalysis() {
   const [moveBadge, setMoveBadge] = useState(null); // { square, classification, label, color, symbol }
   const [lastMove, setLastMove] = useState(null);   // { from, to }
   const [analysisDepth, setAnalysisDepth] = useState(18); // Stockfish analysis depth
+  const [fenCopied, setFenCopied] = useState(false); // Copy feedback state
 
   const fileInputRef = useRef(null);
   const playIntervalRef = useRef(null);
@@ -2096,6 +2097,17 @@ export default function PGNAnalysis() {
       playIntervalRef.current = null;
     }
   }, []);
+
+  const copyFEN = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(currentPosition);
+      setFenCopied(true);
+      setTimeout(() => setFenCopied(false), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy FEN:', err);
+      alert('Failed to copy FEN to clipboard');
+    }
+  }, [currentPosition]);
 
 
   // autoplay
@@ -2499,6 +2511,18 @@ export default function PGNAnalysis() {
                 title="Flip Board"
               >
                 🔄
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  copyFEN();
+                }}
+                disabled={isPlaying}
+                className="rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 px-4 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                title="Copy FEN (enabled when paused)"
+              >
+                {fenCopied ? '✓ Copied!' : '📋 Copy FEN'}
               </button>
             </div>
 

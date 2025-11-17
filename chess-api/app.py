@@ -619,15 +619,28 @@ async def evaluate_move(
         # )
 
         # --- Miss detection (FIXED CALL) ---
+        # is_miss = detect_miss(
+        #     # IMPORTANT: use played-from-PRE eval here, not eval_before_cp
+        #     eval_before_white=played_eval_from_pre,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     best_mate_in_plies=best_mate_in,
+        #     played_mate_in_plies=played_mate_in,
+        # )
+
+
+        # --- Miss detection ---
         is_miss = detect_miss(
-            # IMPORTANT: use played-from-PRE eval here, not eval_before_cp
-            eval_before_white=played_eval_from_pre,
-            eval_after_white=eval_after_cp,
-            eval_best_white=best_eval_from_pre,
+            eval_pre_white=eval_before_cp,              # best-line eval from PRE
+            eval_after_white=eval_after_cp,            # eval after move
+            eval_played_pre_white=played_eval_from_pre,# your move's eval from PRE
+            eval_best_pre_white=best_eval_from_pre,    # best move eval from PRE
             mover_color=side_before,
             best_mate_in_plies=best_mate_in,
             played_mate_in_plies=played_mate_in,
         )
+
 
         print("Miss detected:", is_miss)
 
