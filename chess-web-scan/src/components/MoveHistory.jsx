@@ -201,7 +201,7 @@ function MoveButton({ move, isActive, onClick }) {
 function getClassificationColor(classification) {
   const colors = {
     brilliant: '#1baca6',
-    great: '#5c8bb0',
+    great: '#739abc',
     book: '#a88865',
     best: '#374151',
     excellent: '#374151',

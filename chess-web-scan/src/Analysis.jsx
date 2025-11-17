@@ -18,6 +18,7 @@ import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evalu
 function getClassificationColor(classification) {
   const colors = {
     brilliant: '#1baca6',
+    great: '#739abc',
     book: '#a88865',
     best: '#9bc02a',
     excellent: '#96bc4b',
@@ -36,6 +37,8 @@ function getBadgeSymbol(classification) {
   switch (classification.toLowerCase()) {
     case 'brilliant':
       return '!!';
+    case 'great':
+      return '!';
     case 'best':
       return '!';
     case 'excellent':

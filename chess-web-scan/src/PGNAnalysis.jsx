@@ -1785,6 +1785,7 @@ import { API_BASE_URL } from './config/api';
 const getClassificationColor = (classification) => {
   const colors = {
     brilliant: '#1baca6',
+    great: '#739abc',
     book: '#a88865',
     best: '#9bc02a',
     excellent: '#96bc4b',
@@ -1803,6 +1804,8 @@ function getBadgeSymbol(classification) {
   switch (classification.toLowerCase()) {
     case 'brilliant':
       return '!!';
+    case 'great':
+      return '!';
     case 'best':
       return '!';
     case 'excellent':
@@ -2229,6 +2232,7 @@ export default function PGNAnalysis() {
 
     const base = () => ({
       brilliant: 0,
+      great: 0,
       book: 0,
       best: 0,
       excellent: 0,
@@ -2568,6 +2572,7 @@ export default function PGNAnalysis() {
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
               {[
                 'brilliant',
+                'great',
                 'best',
                 'excellent',
                 'good',
