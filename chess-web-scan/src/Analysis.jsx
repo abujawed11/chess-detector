@@ -46,7 +46,7 @@ function getBadgeSymbol(classification) {
     case 'good':
       return '✓';
     case 'miss':
-      return '!?';
+      return '❌';
     case 'inaccuracy':
       return '?!';
     case 'mistake':
