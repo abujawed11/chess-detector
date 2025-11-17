@@ -581,7 +581,7 @@ export default function PGNAnalysis() {
     return (
       <div className="mx-auto max-w-4xl p-6">
         <div className="mb-8">
-          <h2 className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-3xl font-bold text-transparent">
+          <h2 className="bg-linear-to-r from-purple-600 to-blue-600 bg-clip-text text-3xl font-bold text-transparent">
             PGN Game Analysis
           </h2>
           <p className="mt-2 text-slate-700">
@@ -590,13 +590,32 @@ export default function PGNAnalysis() {
           </p>
         </div>
 
-        <div className="rounded-xl border-2 border-dashed border-purple-300 bg-gradient-to-br from-purple-50 to-blue-50 p-12 text-center shadow-sm">
+        <div className="rounded-xl border-2 border-dashed border-purple-300 bg-linear-to-br from-purple-50 to-blue-50 p-12 text-center shadow-sm">
           <div className="mb-6 text-6xl">📄</div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="mb-4 rounded-lg bg-purple-600 px-8 py-3 text-lg font-semibold text-white transition hover:bg-purple-700"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)';
+              e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(124, 58, 237, 0.4), 0 12px 24px -8px rgba(0, 0, 0, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(124, 58, 237, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'scale(0.95)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)';
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+              boxShadow: '0 10px 15px -3px rgba(124, 58, 237, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease'
+            }}
+            className="mb-4 rounded-2xl px-10 py-4 text-lg font-bold text-white"
           >
-            Choose PGN File
+            📂 Choose PGN File
           </button>
           <input
             ref={fileInputRef}
@@ -642,9 +661,9 @@ export default function PGNAnalysis() {
 
   // ───────────── Analysis View ─────────────
   return (
-    <div className="mx-auto max-w-[1600px] bg-gradient-to-br from-slate-50 to-blue-50 p-5">
+    <div className="mx-auto max-w-[1600px] bg-linear-to-br from-slate-50 to-blue-50 p-5">
       {/* Header */}
-      <div className="mb-4 rounded-xl border border-blue-200 bg-gradient-to-r from-white to-blue-50 p-6 shadow-md">
+      <div className="mb-4 rounded-xl border border-blue-200 bg-linear-to-r from-white to-blue-50 p-6 shadow-md">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">
@@ -665,7 +684,26 @@ export default function PGNAnalysis() {
               setLastMove(null);
               setMoveBadge(null);
             }}
-            className="rounded-lg bg-gradient-to-r from-slate-100 to-slate-200 px-4 py-2 font-semibold text-slate-700 transition hover:from-slate-200 hover:to-slate-300"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)';
+              e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(244, 63, 94, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(244, 63, 94, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'scale(0.95)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)';
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #f43f5e, #dc2626)',
+              boxShadow: '0 4px 6px -1px rgba(244, 63, 94, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease'
+            }}
+            className="rounded-xl px-5 py-2.5 font-bold text-white"
           >
             📁 Load New Game
           </button>
@@ -713,7 +751,7 @@ export default function PGNAnalysis() {
       */}
       <div className="mb-6 grid gap-5 lg:grid-cols-2">
         {/* Column 1: Board + controls */}
-        <div className="w-full rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm flex flex-col items-center">
+        <div className="w-full rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 to-white p-4 shadow-sm flex flex-col items-center">
           {/* <div className="w-full max-w-[520px]"> */}
           <InteractiveBoard
             fen={currentPosition}
@@ -735,7 +773,38 @@ export default function PGNAnalysis() {
                   goToStart();
                 }}
                 disabled={currentMoveIndex === -1}
-                className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 p-3 font-bold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                onMouseEnter={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: currentMoveIndex === -1
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #475569, #334155)',
+                  opacity: currentMoveIndex === -1 ? 0.4 : 1,
+                  cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
+                  boxShadow: currentMoveIndex === -1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl p-3.5 font-bold text-white"
                 title="Go to Start (Home)"
               >
                 ⏮
@@ -748,7 +817,38 @@ export default function PGNAnalysis() {
                   goToPrevious();
                 }}
                 disabled={currentMoveIndex === -1}
-                className="rounded-lg bg-gradient-to-br from-blue-400 to-blue-500 p-3 font-bold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                onMouseEnter={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (currentMoveIndex !== -1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: currentMoveIndex === -1
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  opacity: currentMoveIndex === -1 ? 0.4 : 1,
+                  cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
+                  boxShadow: currentMoveIndex === -1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl p-3.5 font-bold text-white"
                 title="Previous Move (←)"
               >
                 ◀
@@ -760,7 +860,38 @@ export default function PGNAnalysis() {
                   togglePlay();
                 }}
                 disabled={moves.length === 0}
-                className="rounded-lg bg-gradient-to-br from-green-500 to-green-600 px-6 py-3 font-bold text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-110 active:scale-95 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-400 disabled:hover:scale-100"
+                onMouseEnter={(e) => {
+                  if (moves.length !== 0) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.3), 0 12px 24px -8px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (moves.length !== 0) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (moves.length !== 0) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (moves.length !== 0) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: moves.length === 0
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #10b981, #059669)',
+                  opacity: moves.length === 0 ? 0.4 : 1,
+                  cursor: moves.length === 0 ? 'not-allowed' : 'pointer',
+                  boxShadow: moves.length === 0 ? 'none' : '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-2xl px-8 py-4 text-lg font-bold text-white"
                 title="Play/Pause (Space)"
               >
                 {isPlaying ? '⏸' : '▶'}
@@ -773,7 +904,38 @@ export default function PGNAnalysis() {
                   goToNext();
                 }}
                 disabled={currentMoveIndex >= moves.length - 1}
-                className="rounded-lg bg-gradient-to-br from-blue-400 to-blue-500 p-3 font-bold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                onMouseEnter={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: currentMoveIndex >= moves.length - 1
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  opacity: currentMoveIndex >= moves.length - 1 ? 0.4 : 1,
+                  cursor: currentMoveIndex >= moves.length - 1 ? 'not-allowed' : 'pointer',
+                  boxShadow: currentMoveIndex >= moves.length - 1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl p-3.5 font-bold text-white"
                 title="Next Move (→)"
               >
                 ▶
@@ -785,19 +947,69 @@ export default function PGNAnalysis() {
                   goToEnd();
                 }}
                 disabled={currentMoveIndex >= moves.length - 1}
-                className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 p-3 font-bold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                onMouseEnter={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (currentMoveIndex < moves.length - 1) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: currentMoveIndex >= moves.length - 1
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #475569, #334155)',
+                  opacity: currentMoveIndex >= moves.length - 1 ? 0.4 : 1,
+                  cursor: currentMoveIndex >= moves.length - 1 ? 'not-allowed' : 'pointer',
+                  boxShadow: currentMoveIndex >= moves.length - 1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl p-3.5 font-bold text-white"
                 title="Go to End (End)"
               >
                 ⏭
               </button>
-              <div className="mx-2 h-10 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+              <div className="mx-2 h-10 w-px bg-linear-to-b from-transparent via-slate-300 to-transparent" />
               <button
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
                   setFlipped(!flipped);
                 }}
-                className="rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 px-4 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                  e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = 'scale(0.95)';
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl px-5 py-3 font-semibold text-white"
                 title="Flip Board"
               >
                 🔄
@@ -809,7 +1021,38 @@ export default function PGNAnalysis() {
                   copyFEN();
                 }}
                 disabled={isPlaying}
-                className="rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 px-4 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400"
+                onMouseEnter={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: isPlaying
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #14b8a6, #0891b2)',
+                  opacity: isPlaying ? 0.4 : 1,
+                  cursor: isPlaying ? 'not-allowed' : 'pointer',
+                  boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl px-5 py-3 font-semibold text-white"
                 title="Copy FEN (enabled when paused)"
               >
                 {fenCopied ? '✓ Copied!' : '📋 Copy FEN'}
@@ -821,11 +1064,40 @@ export default function PGNAnalysis() {
                   setShowEngineHint(!showEngineHint);
                 }}
                 disabled={isPlaying}
-                className={`rounded-lg px-4 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400 ${
-                  showEngineHint
-                    ? 'bg-gradient-to-br from-green-500 to-green-600'
-                    : 'bg-gradient-to-br from-slate-500 to-slate-600'
-                }`}
+                onMouseEnter={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (!isPlaying) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: isPlaying
+                    ? '#cbd5e1'
+                    : showEngineHint
+                    ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
+                    : 'linear-gradient(135deg, #64748b, #475569)',
+                  opacity: isPlaying ? 0.4 : 1,
+                  cursor: isPlaying ? 'not-allowed' : 'pointer',
+                  boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl px-5 py-3 font-semibold text-white"
                 title={`${showEngineHint ? 'Hide' : 'Show'} engine hint (enabled when paused)`}
               >
                 {showEngineHint ? '🔍 Hide Hint' : '💡 Show Hint'}
@@ -851,7 +1123,7 @@ export default function PGNAnalysis() {
                       setPlaySpeed(s.value);
                     }}
                     className={`rounded-md px-4 py-2 text-sm font-bold shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 active:scale-95 ${playSpeed === s.value
-                      ? `bg-gradient-to-br ${s.color} text-white ring-2 ring-offset-2 ring-blue-300`
+                      ? `bg-linear-to-br ${s.color} text-white ring-2 ring-offset-2 ring-blue-300`
                       : 'bg-white text-slate-700 hover:bg-slate-50'
                       }`}
                   >
@@ -867,7 +1139,7 @@ export default function PGNAnalysis() {
 
             {/* Engine Evaluation Display */}
             {showEngineHint && currentEval && (
-              <div className="mt-3 rounded-lg border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 px-4 py-2 text-center shadow-sm">
+              <div className="mt-3 rounded-lg border border-green-200 bg-linear-to-br from-green-50 to-emerald-50 px-4 py-2 text-center shadow-sm">
                 <div className="text-xs font-semibold text-slate-600">Engine Evaluation</div>
                 <div className="text-lg font-bold text-green-700">
                   {currentEval.type === 'mate'
@@ -929,7 +1201,7 @@ export default function PGNAnalysis() {
         <div className="flex flex-col gap-4">
 
           {/* Column 2: Move History */}
-          <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 to-white p-5 shadow-sm">
             <h3 className="mb-3 text-lg font-bold text-slate-800">
               Move History
             </h3>
@@ -990,7 +1262,7 @@ export default function PGNAnalysis() {
             {currentMoveIndex >= 0 &&
               analyzedMoves[currentMoveIndex] &&
               analyzedMoves[currentMoveIndex].explanation && (
-              <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+              <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-4 shadow-sm">
                 <h3 className="mb-3 text-lg font-bold text-emerald-800">
                   Move Explanation
                 </h3>
@@ -1026,7 +1298,7 @@ export default function PGNAnalysis() {
 
 
       {analyzedMoves.length === 0 && !isAnalyzing && (
-        <div className="mb-4 rounded-xl border-2 border-purple-300 bg-gradient-to-br from-purple-50 to-blue-50 p-6 text-center shadow-md">
+        <div className="mb-4 rounded-xl border-2 border-purple-300 bg-linear-to-br from-purple-50 to-blue-50 p-6 text-center shadow-md">
           <p className="mb-2 text-lg font-semibold text-slate-800">
             Ready to analyze{' '}
             <strong className="text-purple-600">{moves.length}</strong> moves
@@ -1060,7 +1332,39 @@ export default function PGNAnalysis() {
           <button
             onClick={analyzeGame}
             disabled={!initialized}
-            className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-3 text-lg font-bold text-white shadow-lg transition hover:from-purple-700 hover:to-blue-700 disabled:cursor-not-allowed disabled:from-slate-400 disabled:to-slate-400"
+            onMouseEnter={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1.1)';
+                e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(124, 58, 237, 0.5), 0 12px 24px -8px rgba(0, 0, 0, 0.2)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(124, 58, 237, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+              }
+            }}
+            onMouseDown={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(0.95)';
+              }
+            }}
+            onMouseUp={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1.1)';
+              }
+            }}
+            style={{
+              background: !initialized
+                ? '#94a3b8'
+                : 'linear-gradient(135deg, #7c3aed, #4338ca)',
+              cursor: !initialized ? 'not-allowed' : 'pointer',
+              boxShadow: !initialized
+                ? 'none'
+                : '0 10px 15px -3px rgba(124, 58, 237, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease'
+            }}
+            className="rounded-2xl px-10 py-4 text-xl font-bold text-white"
           >
             {initialized ? '🔍 Start Analysis' : '⏳ Waiting for Engine...'}
           </button>
@@ -1072,7 +1376,7 @@ export default function PGNAnalysis() {
 
       {/* Progress */}
       {isAnalyzing && (
-        <div className="mb-4 rounded-xl border-2 border-purple-300 bg-gradient-to-br from-purple-50 to-blue-50 p-6 shadow-md">
+        <div className="mb-4 rounded-xl border-2 border-purple-300 bg-linear-to-br from-purple-50 to-blue-50 p-6 shadow-md">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-bold text-slate-800">
               🔍 Analyzing game... (
@@ -1085,7 +1389,7 @@ export default function PGNAnalysis() {
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-white shadow-inner">
             <div
-              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-300"
+              className="h-full bg-linear-to-r from-purple-500 to-blue-500 transition-all duration-300"
               style={{ width: `${analysisProgress}%` }}
             />
           </div>
@@ -1103,7 +1407,7 @@ export default function PGNAnalysis() {
       {stats && (
         <div className="mb-4 space-y-4">
           {/* White Stats */}
-          <div className="rounded-xl border-2 border-slate-300 bg-gradient-to-r from-white to-slate-50 p-5 shadow-md">
+          <div className="rounded-xl border-2 border-slate-300 bg-linear-to-r from-white to-slate-50 p-5 shadow-md">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
                 ⬜ {gameInfo?.white || 'White'} Statistics
@@ -1120,7 +1424,7 @@ export default function PGNAnalysis() {
                   return (
                     <div
                       key={key}
-                      className="rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 p-2.5 text-center shadow-sm"
+                      className="rounded-lg bg-linear-to-br from-slate-100 to-slate-200 p-2.5 text-center shadow-sm"
                     >
                       <div className="text-xl font-bold text-slate-900">
                         {value}
@@ -1155,7 +1459,7 @@ export default function PGNAnalysis() {
           </div>
 
           {/* Black Stats */}
-          <div className="rounded-xl border-2 border-slate-700 bg-gradient-to-r from-slate-800 to-slate-700 p-5 shadow-md">
+          <div className="rounded-xl border-2 border-slate-700 bg-linear-to-r from-slate-800 to-slate-700 p-5 shadow-md">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
                 ⬛ {gameInfo?.black || 'Black'} Statistics
@@ -1172,7 +1476,7 @@ export default function PGNAnalysis() {
                   return (
                     <div
                       key={key}
-                      className="rounded-lg bg-gradient-to-br from-slate-600 to-slate-500 p-2.5 text-center shadow-sm"
+                      className="rounded-lg bg-linear-to-br from-slate-600 to-slate-500 p-2.5 text-center shadow-sm"
                     >
                       <div className="text-xl font-bold text-white">
                         {value}
@@ -1204,7 +1508,7 @@ export default function PGNAnalysis() {
           </div>
 
           {/* Overall Stats */}
-          <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 shadow-sm">
+          <div className="rounded-xl border border-blue-200 bg-linear-to-r from-blue-50 to-indigo-50 p-4 shadow-sm">
             <h3 className="mb-3 text-sm font-bold text-slate-700">
               📊 Overall Game Statistics
             </h3>

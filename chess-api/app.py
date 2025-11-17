@@ -41,6 +41,9 @@ from basic_move_labels import (
 )
 
 from opening_book import is_book_move
+
+from basic_move_labels import cp_for_player
+
 # from basic_move_labels import (
 #     classify_basic_move,
 #     detect_miss,
@@ -569,6 +572,31 @@ async def evaluate_move(
 
         logger.info(f"[EVAL] pre={eval_before_cp:+} post={eval_after_cp:+} (Δ {eval_after_cp - eval_before_cp:+})")
 
+        # --- Stalemate-from-winning Miss detection ---
+        mover_adv_before = cp_for_player(eval_before_cp, side_before)   # PRE eval for mover
+        mover_adv_after  = cp_for_player(eval_after_cp,  side_before)   # POST eval for mover
+
+        # "clearly winning" threshold (you can tweak 300→400 later if needed)
+        CLEAR_WIN_CP = 300   # ~3 pawns
+        DRAW_BAND_CP = 60    # |cp| <= 60 ≈ drawn
+
+        was_clearly_winning_before = mover_adv_before >= CLEAR_WIN_CP
+        is_drawish_after           = abs(mover_adv_after) <= DRAW_BAND_CP
+
+        # Check if the game result is actually a draw
+        is_draw_result = False
+        if board_after.is_stalemate():
+            is_draw_result = True
+        elif board_after.is_game_over():
+            # Could be draw by insufficient material, repetition, etc.
+            if board_after.result() == "1/2-1/2":
+                is_draw_result = True
+
+        stalemate_from_win_miss = was_clearly_winning_before and is_drawish_after and is_draw_result
+
+        print("stalemate_from_win_miss:", stalemate_from_win_miss)
+
+
         # CPL calculation
         if played_eval_from_pre is None:
             played_eval_from_pre = eval_after_cp
@@ -701,10 +729,19 @@ async def evaluate_move(
         elif exclam_label in ("Brilliant", "Great"):
             # Any non-sac brilliancy from the old logic becomes 'Great'
             label = "Great"
+
+        elif stalemate_from_win_miss:
+    # Special case: you were winning and stalemated into a draw
+            label = "Miss"
         elif is_miss:
             label = "Miss"
         else:
             label = basic_label
+
+        # elif is_miss:
+        #     label = "Miss"
+        # else:
+        #     label = basic_label
 
 
         print("Label: ", label)

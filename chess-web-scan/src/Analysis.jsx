@@ -117,7 +117,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
   const analyzeCurrentPosition = useCallback(async (forceShowHint = false) => {
     if (!initialized) return;
-    
+
     // Don't analyze if game is over - check using currentFen
     try {
       const tempGame = new Chess(currentFen);
@@ -141,7 +141,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
     } catch (e) {
       console.error('Error checking game over:', e);
     }
-    
+
     try {
       const result = await analyze(currentFen, { depth: analysisDepth, multiPV: 3 });
       setCurrentEval(result.evaluation);
@@ -167,7 +167,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       // Invalid FEN, don't analyze
       gameOver = true;
     }
-    
+
     if (autoAnalyze && initialized && !isProcessingMove && !gameOver) {
       const t = setTimeout(() => analyzeCurrentPosition(), 220);
       return () => clearTimeout(t);
@@ -175,90 +175,283 @@ export default function Analysis({ initialFen, onEditPosition }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFen, autoAnalyze, initialized, isProcessingMove]);
 
-  const handleMove = useCallback(async (move, newFen) => {
-    if (!initialized) return;
-    setIsProcessingMove(true);
+  // const handleMove = useCallback(async (move, newFen) => {
+  //   if (!initialized) return;
+  //   setIsProcessingMove(true);
 
-    const previousFen = currentFen;
-    const previousAnalysis = storedAnalysis;
+  //   const previousFen = currentFen;
+  //   const previousAnalysis = storedAnalysis;
 
-    setHintRequested(false);
-    setLastMoveClassification(null);
-    setBestMove(null);
+  //   setHintRequested(false);
+  //   setLastMoveClassification(null);
+  //   setBestMove(null);
 
-    // IMPORTANT: Update the shared game instance to stay in sync
-    try {
-      game.load(newFen);
-    } catch (e) {
-      console.error('Failed to load new FEN into game instance:', e);
-      setIsProcessingMove(false);
-      return;
-    }
+  //   // IMPORTANT: Update the shared game instance to stay in sync
+  //   try {
+  //     game.load(newFen);
+  //   } catch (e) {
+  //     console.error('Failed to load new FEN into game instance:', e);
+  //     setIsProcessingMove(false);
+  //     return;
+  //   }
 
-    setCurrentFen(newFen);
+  //   setCurrentFen(newFen);
 
-    // Track last move for highlighting
-    setLastMove({ from: move.from, to: move.to });
+  //   // Track last move for highlighting
+  //   setLastMove({ from: move.from, to: move.to });
 
-    // Check if the new position is game over
-    let isGameOverPosition = false;
-    try {
-      const checkGame = new Chess(newFen);
-      isGameOverPosition = checkGame.isGameOver();
-    } catch (e) {
-      console.error('Error checking game over in handleMove:', e);
-    }
+  //   // Check if the new position is game over
+  //   let isGameOverPosition = false;
+  //   try {
+  //     const checkGame = new Chess(newFen);
+  //     isGameOverPosition = checkGame.isGameOver();
+  //   } catch (e) {
+  //     console.error('Error checking game over in handleMove:', e);
+  //   }
 
-    try {
-      let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a', isBrilliantV2: false };
-      let explanation = null;
-      let bestMoveForNewPosition = null;
-      let evaluationAfterMove = null;
-      let result = null;
+  //   try {
+  //     let classification = { classification: 'best', label: 'Best', cpLoss: 0, color: '#16a34a', isBrilliantV2: false };
+  //     let explanation = null;
+  //     let bestMoveForNewPosition = null;
+  //     let evaluationAfterMove = null;
+  //     let result = null;
 
-      // OPTIMIZATION: Run move classification AND position analysis in PARALLEL!
-      // This cuts total time roughly in HALF
-      if (!isGameOverPosition) {
+  //     // OPTIMIZATION: Run move classification AND position analysis in PARALLEL!
+  //     // This cuts total time roughly in HALF
+  //     if (!isGameOverPosition) {
+  //       const promises = [];
+
+  //       // Promise 1: Analyze new position for engine lines (always needed)
+  //       promises.push(
+  //         analyze(newFen, { depth: analysisDepth, multiPV: 3 })
+  //           .then(res => { result = res; })
+  //           .catch(err => console.error('Analysis error:', err))
+  //       );
+
+  //       // Promise 2: Classify the move (only if we have previous analysis)
+  //       if (previousAnalysis?.lines?.length) {
+  //         const movePlayed = move.from + move.to + (move.promotion || '');
+
+  //         promises.push(
+  //           evaluateMove(previousFen, movePlayed, analysisDepth, 5)
+  //             .then(evaluation => {
+  //               console.log('✅ Backend evaluation result:', evaluation);
+
+  //               const badge = getMoveBadge(evaluation);
+  //               explanation = getMoveExplanation(evaluation);
+
+  //               classification = {
+  //                 classification: evaluation.label.toLowerCase(),
+  //                 label: evaluation.label,
+  //                 cpLoss: evaluation.cpl || 0,
+  //                 color: badge.color,
+  //                 isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
+  //                 brilliantAnalysis: evaluation.brilliantInfo || null,
+  //                 fullEvaluation: evaluation
+  //               };
+
+  //               // Use evaluation from backend
+  //               evaluationAfterMove = evaluation.raw?.eval_after_struct || { 
+  //                 type: 'cp', 
+  //                 value: evaluation.evalAfter || 0 
+  //               };
+
+  //               console.log('📊 Classification applied:', classification);
+  //             })
+  //             .catch(e => {
+  //               console.error('❌ Backend evaluation error:', e);
+  //               classification = {
+  //                 classification: 'good',
+  //                 label: 'Good',
+  //                 cpLoss: 0,
+  //                 color: '#96af8b',
+  //                 isBrilliantV2: false
+  //               };
+  //               explanation = 'Move classification unavailable - backend error';
+  //             })
+  //         );
+  //       }
+
+  //       // Wait for BOTH to complete (runs in parallel!)
+  //       console.log('⚡ Running analysis and classification in parallel...');
+  //       await Promise.all(promises);
+  //       console.log('✅ Both operations complete!');
+
+  //       // Set results
+  //       if (result) {
+  //         bestMoveForNewPosition = result.lines[0]?.pv[0];
+  //         setStoredAnalysis(result);
+  //         setCurrentEval(evaluationAfterMove || result.evaluation);
+  //         setEngineLines(result.lines || []);
+  //       }
+  //     } else {
+  //       // Game over - set terminal evaluation
+  //       console.log('🏁 Game ended with this move');
+  //       const checkGame = new Chess(newFen);
+  //       if (checkGame.isCheckmate()) {
+  //         setCurrentEval({ type: 'mate', value: 0 });
+  //       } else {
+  //         setCurrentEval({ type: 'cp', value: 0 });
+  //       }
+  //       setEngineLines([]);
+  //       setStoredAnalysis(null);
+  //     }
+
+  //     const newMove = {
+  //       ...move,
+  //       evaluation: result?.evaluation || null,
+  //       classification: classification.classification,
+  //       classificationLabel: classification.label,
+  //       cpLoss: classification.cpLoss,
+  //       isBrilliantV2: classification.isBrilliantV2,
+  //       brilliantAnalysis: classification.brilliantAnalysis,
+  //       explanation: explanation,
+  //       // Store full backend evaluation data
+  //       fullEvaluation: classification.fullEvaluation || null
+  //     };
+
+  //     // Debug logging
+  //     console.log('📝 Storing move:', {
+  //       from: newMove.from,
+  //       to: newMove.to,
+  //       san: newMove.san,
+  //       promotion: newMove.promotion,
+  //       piece: newMove.piece,
+  //       captured: newMove.captured,
+  //       moveIndex: moves.length,
+  //       currentMoveIndex
+  //     });
+
+  //     // IMPORTANT: When adding a new move, clear all moves after current position
+  //     // This handles the case where user goes back and plays a different variation
+  //     setMoves(prev => {
+  //       const movesUpToCurrent = prev.slice(0, currentMoveIndex + 1);
+  //       return [...movesUpToCurrent, newMove];
+  //     });
+  //     setCurrentMoveIndex(prev => prev + 1);
+
+  //     // Set the classification to display in the UI
+  //     setLastMoveClassification(classification);
+
+  //     // Set move badge on board square (Chess.com style)
+  //     if (classification && classification.label) {
+  //       // Clear any existing timeout
+  //       if (badgeTimeoutRef.current) {
+  //         clearTimeout(badgeTimeoutRef.current);
+  //       }
+
+  //       const symbol = getBadgeSymbol(classification.label.toLowerCase());
+
+  //       setMoveBadge({
+  //         square: newMove.to,
+  //         classification: classification.label.toLowerCase(),
+  //         label: classification.label,
+  //         color: classification.color,
+  //         symbol
+  //       });
+
+  //       // Auto-hide badge after 5 seconds
+  //       // badgeTimeoutRef.current = setTimeout(() => {
+  //       //   setMoveBadge(null);
+  //       // }, 5000);
+  //     }
+
+  //     if (showBestMove && !isGameOverPosition) setBestMove(bestMoveForNewPosition);
+  //   } catch (err) {
+  //     console.error('Analysis error:', err);
+  //   } finally {
+  //     setIsProcessingMove(false);
+  //   }
+  // }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
+
+
+  const handleMove = useCallback(
+    async (move, newFen) => {
+      if (!initialized) return;
+      setIsProcessingMove(true);
+
+      const previousFen = currentFen;
+      const previousAnalysis = storedAnalysis;
+
+      setHintRequested(false);
+      setLastMoveClassification(null);
+      setBestMove(null);
+
+      // IMPORTANT: Update the shared game instance to stay in sync
+      try {
+        game.load(newFen);
+      } catch (e) {
+        console.error('Failed to load new FEN into game instance:', e);
+        setIsProcessingMove(false);
+        return;
+      }
+
+      setCurrentFen(newFen);
+
+      // Track last move for highlighting
+      setLastMove({ from: move.from, to: move.to });
+
+      // Check if the new position is game over
+      let isGameOverPosition = false;
+      try {
+        const checkGame = new Chess(newFen);
+        isGameOverPosition = checkGame.isGameOver();
+      } catch (e) {
+        console.error('Error checking game over in handleMove:', e);
+      }
+
+      try {
+        let classification = {
+          classification: 'best',
+          label: 'Best',
+          cpLoss: 0,
+          color: '#16a34a',
+          isBrilliantV2: false
+        };
+        let explanation = null;
+        let bestMoveForNewPosition = null;
+        let evaluationAfterMove = null;
+        let result = null;
+
+        // We'll run things in parallel, but:
+        // - ALWAYS call backend evaluateMove if we have previousAnalysis
+        // - ONLY call analyze(newFen) if NOT game over
         const promises = [];
-        
-        // Promise 1: Analyze new position for engine lines (always needed)
-        promises.push(
-          analyze(newFen, { depth: analysisDepth, multiPV: 3 })
-            .then(res => { result = res; })
-            .catch(err => console.error('Analysis error:', err))
-        );
-        
-        // Promise 2: Classify the move (only if we have previous analysis)
+
+        // Promise 1: BACKEND move evaluation (we want this EVEN if game is over)
         if (previousAnalysis?.lines?.length) {
           const movePlayed = move.from + move.to + (move.promotion || '');
-          
+
           promises.push(
             evaluateMove(previousFen, movePlayed, analysisDepth, 5)
-              .then(evaluation => {
+              .then((evaluation) => {
                 console.log('✅ Backend evaluation result:', evaluation);
-                
+
                 const badge = getMoveBadge(evaluation);
                 explanation = getMoveExplanation(evaluation);
-                
+
                 classification = {
                   classification: evaluation.label.toLowerCase(),
                   label: evaluation.label,
                   cpLoss: evaluation.cpl || 0,
                   color: badge.color,
-                  isBrilliantV2: evaluation.label === 'Brilliant' || evaluation.label === 'Great',
+                  isBrilliantV2:
+                    evaluation.label === 'Brilliant' ||
+                    evaluation.label === 'Great',
                   brilliantAnalysis: evaluation.brilliantInfo || null,
                   fullEvaluation: evaluation
                 };
-                
+
                 // Use evaluation from backend
-                evaluationAfterMove = evaluation.raw?.eval_after_struct || { 
-                  type: 'cp', 
-                  value: evaluation.evalAfter || 0 
-                };
-                
+                evaluationAfterMove =
+                  evaluation.raw?.eval_after_struct || {
+                    type: 'cp',
+                    value: evaluation.evalAfter || 0
+                  };
+
                 console.log('📊 Classification applied:', classification);
               })
-              .catch(e => {
+              .catch((e) => {
                 console.error('❌ Backend evaluation error:', e);
                 classification = {
                   classification: 'good',
@@ -271,98 +464,119 @@ export default function Analysis({ initialFen, onEditPosition }) {
               })
           );
         }
-        
-        // Wait for BOTH to complete (runs in parallel!)
-        console.log('⚡ Running analysis and classification in parallel...');
-        await Promise.all(promises);
-        console.log('✅ Both operations complete!');
-        
-        // Set results
-        if (result) {
-          bestMoveForNewPosition = result.lines[0]?.pv[0];
-          setStoredAnalysis(result);
-          setCurrentEval(evaluationAfterMove || result.evaluation);
-          setEngineLines(result.lines || []);
+
+        // Promise 2: Engine lines for the new position (ONLY if not game over)
+        if (!isGameOverPosition) {
+          promises.push(
+            analyze(newFen, { depth: analysisDepth, multiPV: 3 })
+              .then((res) => {
+                result = res;
+              })
+              .catch((err) => console.error('Analysis error:', err))
+          );
         }
-      } else {
-        // Game over - set terminal evaluation
-        console.log('🏁 Game ended with this move');
-        const checkGame = new Chess(newFen);
-        if (checkGame.isCheckmate()) {
-          setCurrentEval({ type: 'mate', value: 0 });
+
+        if (promises.length > 0) {
+          console.log('⚡ Running analysis and classification in parallel...');
+          await Promise.all(promises);
+          console.log('✅ Both operations complete!');
+        }
+
+        // -----------------------------
+        // NON-GAME-OVER POSITION
+        // -----------------------------
+        if (!isGameOverPosition) {
+          if (result) {
+            bestMoveForNewPosition = result.lines[0]?.pv[0];
+            setStoredAnalysis(result);
+            setCurrentEval(evaluationAfterMove || result.evaluation);
+            setEngineLines(result.lines || []);
+          }
         } else {
-          setCurrentEval({ type: 'cp', value: 0 });
-        }
-        setEngineLines([]);
-        setStoredAnalysis(null);
-      }
+          // -----------------------------
+          // GAME OVER POSITION
+          // -----------------------------
+          console.log('🏁 Game ended with this move');
+          const checkGame = new Chess(newFen);
 
-      const newMove = {
-        ...move,
-        evaluation: result?.evaluation || null,
-        classification: classification.classification,
-        classificationLabel: classification.label,
-        cpLoss: classification.cpLoss,
-        isBrilliantV2: classification.isBrilliantV2,
-        brilliantAnalysis: classification.brilliantAnalysis,
-        explanation: explanation,
-        // Store full backend evaluation data
-        fullEvaluation: classification.fullEvaluation || null
-      };
+          // Prefer backend evaluation if we got it (so stalemate-from-winning can be Miss)
+          if (evaluationAfterMove) {
+            setCurrentEval(evaluationAfterMove);
+          } else if (checkGame.isCheckmate()) {
+            setCurrentEval({ type: 'mate', value: 0 });
+          } else {
+            // stalemate / draw
+            setCurrentEval({ type: 'cp', value: 0 });
+          }
 
-      // Debug logging
-      console.log('📝 Storing move:', {
-        from: newMove.from,
-        to: newMove.to,
-        san: newMove.san,
-        promotion: newMove.promotion,
-        piece: newMove.piece,
-        captured: newMove.captured,
-        moveIndex: moves.length,
-        currentMoveIndex
-      });
-
-      // IMPORTANT: When adding a new move, clear all moves after current position
-      // This handles the case where user goes back and plays a different variation
-      setMoves(prev => {
-        const movesUpToCurrent = prev.slice(0, currentMoveIndex + 1);
-        return [...movesUpToCurrent, newMove];
-      });
-      setCurrentMoveIndex(prev => prev + 1);
-
-      // Set the classification to display in the UI
-      setLastMoveClassification(classification);
-
-      // Set move badge on board square (Chess.com style)
-      if (classification && classification.label) {
-        // Clear any existing timeout
-        if (badgeTimeoutRef.current) {
-          clearTimeout(badgeTimeoutRef.current);
+          setEngineLines([]);
+          setStoredAnalysis(null);
         }
 
-        const symbol = getBadgeSymbol(classification.label.toLowerCase());
+        const newMove = {
+          ...move,
+          evaluation: result?.evaluation || null,
+          classification: classification.classification,
+          classificationLabel: classification.label,
+          cpLoss: classification.cpLoss,
+          isBrilliantV2: classification.isBrilliantV2,
+          brilliantAnalysis: classification.brilliantAnalysis,
+          explanation: explanation,
+          fullEvaluation: classification.fullEvaluation || null
+        };
 
-        setMoveBadge({
-          square: newMove.to,
-          classification: classification.label.toLowerCase(),
-          label: classification.label,
-          color: classification.color,
-          symbol
+        // Debug logging
+        console.log('📝 Storing move:', {
+          from: newMove.from,
+          to: newMove.to,
+          san: newMove.san,
+          promotion: newMove.promotion,
+          piece: newMove.piece,
+          captured: newMove.captured,
+          moveIndex: moves.length,
+          currentMoveIndex
         });
 
-        // Auto-hide badge after 5 seconds
-        // badgeTimeoutRef.current = setTimeout(() => {
-        //   setMoveBadge(null);
-        // }, 5000);
-      }
+        // Clear any moves after current index (for variations)
+        setMoves((prev) => {
+          const movesUpToCurrent = prev.slice(0, currentMoveIndex + 1);
+          return [...movesUpToCurrent, newMove];
+        });
+        setCurrentMoveIndex((prev) => prev + 1);
 
-      if (showBestMove && !isGameOverPosition) setBestMove(bestMoveForNewPosition);
-    } catch (err) {
-      console.error('Analysis error:', err);
-    } finally {
-      setIsProcessingMove(false);
-    }
-  }, [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]);
+        // Set the classification to display in the UI
+        setLastMoveClassification(classification);
+
+        // Move badge on the destination square
+        if (classification && classification.label) {
+          if (badgeTimeoutRef.current) {
+            clearTimeout(badgeTimeoutRef.current);
+          }
+
+          const symbol = getBadgeSymbol(classification.label.toLowerCase());
+
+          setMoveBadge({
+            square: newMove.to,
+            classification: classification.label.toLowerCase(),
+            label: classification.label,
+            color: classification.color,
+            symbol
+          });
+        }
+
+        // Only show best move if the game is not over
+        if (showBestMove && !isGameOverPosition) {
+          setBestMove(bestMoveForNewPosition);
+        }
+      } catch (err) {
+        console.error('Analysis error:', err);
+      } finally {
+        setIsProcessingMove(false);
+      }
+    },
+    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]
+  );
+
 
   const navigateToMove = useCallback((moveIndex) => {
     // Handle going to start position (moveIndex === -1)
@@ -558,14 +772,14 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const gameStatus = gameOverState.isCheckmate
     ? `Checkmate! ${gameOverState.turn === 'w' ? 'Black' : 'White'} wins`
     : gameOverState.isStalemate
-    ? 'Stalemate - Draw'
-    : gameOverState.isThreefoldRepetition
-    ? 'Draw by Threefold Repetition'
-    : gameOverState.isInsufficientMaterial
-    ? 'Draw by Insufficient Material'
-    : gameOverState.isDraw
-    ? 'Draw by Fifty-Move Rule'
-    : null;
+      ? 'Stalemate - Draw'
+      : gameOverState.isThreefoldRepetition
+        ? 'Draw by Threefold Repetition'
+        : gameOverState.isInsufficientMaterial
+          ? 'Draw by Insufficient Material'
+          : gameOverState.isDraw
+            ? 'Draw by Fifty-Move Rule'
+            : null;
 
   return (
     <div className="mx-auto max-w-[1900px] px-4 py-5 text-slate-900">
@@ -688,74 +902,74 @@ export default function Analysis({ initialFen, onEditPosition }) {
           {/* Board column */}
           <div className="flex flex-col gap-3">
             <div className="relative flex items-center justify-center">
-            <InteractiveBoard
-              fen={currentFen}
-              onMove={handleMove}
-              flipped={flipped}
-              bestMove={bestMove}
-              hoverMove={hoverMove}
-              lastMove={lastMove}
-              moveBadge={moveBadge}
-            />
-            {!initialized && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100/95 rounded-xl">
-                <div className="text-center">
-                  <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-green-600 mx-auto" />
-                  <div className="text-sm font-semibold text-slate-600">Loading engine...</div>
+              <InteractiveBoard
+                fen={currentFen}
+                onMove={handleMove}
+                flipped={flipped}
+                bestMove={bestMove}
+                hoverMove={hoverMove}
+                lastMove={lastMove}
+                moveBadge={moveBadge}
+              />
+              {!initialized && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100/95 rounded-xl">
+                  <div className="text-center">
+                    <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-green-600 mx-auto" />
+                    <div className="text-sm font-semibold text-slate-600">Loading engine...</div>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Move navigation */}
+            <div className="flex w-[680px] justify-center gap-2">
+              <button
+                onClick={() => navigateToMove(-1)}
+                disabled={currentMoveIndex === -1}
+                className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                title="First move"
+              >
+                ⏮
+              </button>
+              <button
+                onClick={() => navigateToMove(currentMoveIndex - 1)}
+                disabled={currentMoveIndex === -1}
+                className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                title="Previous"
+              >
+                ◀
+              </button>
+              <button
+                onClick={() => navigateToMove(currentMoveIndex + 1)}
+                disabled={currentMoveIndex === moves.length - 1}
+                className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                title="Next"
+              >
+                ▶
+              </button>
+              <button
+                onClick={() => navigateToMove(moves.length - 1)}
+                disabled={currentMoveIndex === moves.length - 1}
+                className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                title="Last"
+              >
+                ⏭
+              </button>
+            </div>
+
+            {/* Move Explanation Card - appears below navigation */}
+            {currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
+              <div className="w-[680px]">
+                <MoveExplanationCard
+                  moveNumber={currentMoveIndex + 1}
+                  playerName={currentMoveIndex % 2 === 0 ? 'White' : 'Black'}
+                  playerMove={moves[currentMoveIndex].san}
+                  classification={moves[currentMoveIndex].classification}
+                  explanation={moves[currentMoveIndex].explanation}
+                  showDetails={true}
+                />
               </div>
             )}
-          </div>
-
-          {/* Move navigation */}
-          <div className="flex w-[680px] justify-center gap-2">
-            <button
-              onClick={() => navigateToMove(-1)}
-              disabled={currentMoveIndex === -1}
-              className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              title="First move"
-            >
-              ⏮
-            </button>
-            <button
-              onClick={() => navigateToMove(currentMoveIndex - 1)}
-              disabled={currentMoveIndex === -1}
-              className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              title="Previous"
-            >
-              ◀
-            </button>
-            <button
-              onClick={() => navigateToMove(currentMoveIndex + 1)}
-              disabled={currentMoveIndex === moves.length - 1}
-              className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              title="Next"
-            >
-              ▶
-            </button>
-            <button
-              onClick={() => navigateToMove(moves.length - 1)}
-              disabled={currentMoveIndex === moves.length - 1}
-              className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              title="Last"
-            >
-              ⏭
-            </button>
-          </div>
-
-          {/* Move Explanation Card - appears below navigation */}
-          {currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
-            <div className="w-[680px]">
-              <MoveExplanationCard
-                moveNumber={currentMoveIndex + 1}
-                playerName={currentMoveIndex % 2 === 0 ? 'White' : 'Black'}
-                playerMove={moves[currentMoveIndex].san}
-                classification={moves[currentMoveIndex].classification}
-                explanation={moves[currentMoveIndex].explanation}
-                showDetails={true}
-              />
-            </div>
-          )}
           </div>
         </div>
 
@@ -763,7 +977,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
         <div className="w-full max-w-[460px] space-y-3 xl:sticky xl:top-4 xl:w-[460px] xl:flex-shrink-0">
           {/* Move Details Panel - shows all backend evaluation data */}
           {currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
-            <MoveDetailsPanel 
+            <MoveDetailsPanel
               moveData={moves[currentMoveIndex].fullEvaluation}
               visible={true}
             />
@@ -818,11 +1032,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
                   {Object.entries(lastMoveClassification.brilliantAnalysis.gates).map(([gate, passed]) => (
                     <div
                       key={gate}
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                        passed
+                      className={`rounded-md px-2 py-1 text-xs font-semibold ${passed
                           ? 'bg-green-100 text-green-700 border border-green-300'
                           : 'bg-red-100 text-red-700 border border-red-300'
-                      }`}
+                        }`}
                     >
                       {passed ? '✓' : '✗'} {gate}
                     </div>
@@ -837,15 +1050,14 @@ export default function Analysis({ initialFen, onEditPosition }) {
                   {lastMoveClassification.brilliantAnalysis.reasons.map((reason, idx) => (
                     <div
                       key={idx}
-                      className={`${
-                        reason.includes('✓') || reason.includes('CONFIRMED')
+                      className={`${reason.includes('✓') || reason.includes('CONFIRMED')
                           ? 'text-green-700 font-bold'
                           : reason.includes('FAILED')
-                          ? 'text-red-700'
-                          : reason.includes('WEAK')
-                          ? 'text-orange-600'
-                          : 'text-slate-600'
-                      }`}
+                            ? 'text-red-700'
+                            : reason.includes('WEAK')
+                              ? 'text-orange-600'
+                              : 'text-slate-600'
+                        }`}
                     >
                       {reason}
                     </div>
@@ -934,43 +1146,43 @@ export default function Analysis({ initialFen, onEditPosition }) {
               <div className="text-sm font-bold text-slate-700">🎯 Engine Analysis</div>
             </div>
             <div className="max-h-[300px] min-h-[200px] overflow-auto p-4">
-            {isGameOver ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-center">
-                  <div className={`mb-2 text-5xl ${gameOverState.isCheckmate ? 'text-red-700' : 'text-amber-600'}`}>
-                    {gameOverState.isCheckmate 
-                      ? '♔' 
-                      : gameOverState.isStalemate 
-                      ? '½–½' 
-                      : gameOverState.isThreefoldRepetition
-                      ? '🔁'
-                      : gameOverState.isInsufficientMaterial
-                      ? '⚖️'
-                      : '½–½'}
-                  </div>
-                  <div className={`text-xl font-bold ${gameOverState.isCheckmate ? 'text-red-700' : 'text-amber-600'}`}>
-                    {gameStatus}
-                  </div>
-                  <div className="mt-2 text-sm text-slate-500">
-                    No further analysis needed
+              {isGameOver ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <div className={`mb-2 text-5xl ${gameOverState.isCheckmate ? 'text-red-700' : 'text-amber-600'}`}>
+                      {gameOverState.isCheckmate
+                        ? '♔'
+                        : gameOverState.isStalemate
+                          ? '½–½'
+                          : gameOverState.isThreefoldRepetition
+                            ? '🔁'
+                            : gameOverState.isInsufficientMaterial
+                              ? '⚖️'
+                              : '½–½'}
+                    </div>
+                    <div className={`text-xl font-bold ${gameOverState.isCheckmate ? 'text-red-700' : 'text-amber-600'}`}>
+                      {gameStatus}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-500">
+                      No further analysis needed
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : engineLines.length === 0 ? (
-              <div className="space-y-3">
-                <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
-                <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
-                <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
-              </div>
-            ) : (
-              <EngineLines
-                lines={engineLines}
-                depth={analysisDepth}
-                turn={turn}
-                onLineClick={() => {}}
-                onLineHover={setHoverMove}
-              />
-            )}
+              ) : engineLines.length === 0 ? (
+                <div className="space-y-3">
+                  <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
+                  <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
+                  <div className="h-16 w-full animate-pulse rounded bg-slate-300" />
+                </div>
+              ) : (
+                <EngineLines
+                  lines={engineLines}
+                  depth={analysisDepth}
+                  turn={turn}
+                  onLineClick={() => { }}
+                  onLineHover={setHoverMove}
+                />
+              )}
             </div>
           </div>
 

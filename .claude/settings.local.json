@@ -12,7 +12,8 @@
       "WebSearch",
       "Bash(mkdir -p \"D:\\react\\chess-detector\\chess-api\\utils\")",
       "Bash(python:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
