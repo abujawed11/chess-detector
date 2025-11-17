@@ -1,7 +1,7 @@
 
 // Analysis.jsx (Tailwind version)
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
@@ -30,6 +30,33 @@ function getClassificationColor(classification) {
   return colors[classification] || '#9bc02a';
 }
 
+// Helper function to get badge symbol for move classification
+function getBadgeSymbol(classification) {
+  if (!classification) return '';
+  switch (classification.toLowerCase()) {
+    case 'brilliant':
+      return '!!';
+    case 'best':
+      return '!';
+    case 'excellent':
+      return '!?';
+    case 'good':
+      return '✓';
+    case 'miss':
+      return '!?';
+    case 'inaccuracy':
+      return '?!';
+    case 'mistake':
+      return '?';
+    case 'blunder':
+      return '??';
+    case 'book':
+      return '📖';
+    default:
+      return '';
+  }
+}
+
 export default function Analysis({ initialFen, onEditPosition }) {
   const startFen = initialFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -55,6 +82,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [isProcessingMove, setIsProcessingMove] = useState(false);
   const [hoverMove, setHoverMove] = useState(null);
   const [threadInfo, setThreadInfo] = useState({ current: 1, max: 1, supportsMultiThreading: false });
+  const [moveBadge, setMoveBadge] = useState(null); // { square, classification, label, color, symbol }
+
+  const badgeTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (initialized && getThreadInfo) {
@@ -62,6 +92,15 @@ export default function Analysis({ initialFen, onEditPosition }) {
       setThreadInfo(info);
     }
   }, [initialized, getThreadInfo]);
+
+  // Cleanup badge timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (badgeTimeoutRef.current) {
+        clearTimeout(badgeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (initialFen && initialFen !== game.fen()) {
@@ -291,6 +330,29 @@ export default function Analysis({ initialFen, onEditPosition }) {
       // Set the classification to display in the UI
       setLastMoveClassification(classification);
 
+      // Set move badge on board square (Chess.com style)
+      if (classification && classification.label) {
+        // Clear any existing timeout
+        if (badgeTimeoutRef.current) {
+          clearTimeout(badgeTimeoutRef.current);
+        }
+
+        const symbol = getBadgeSymbol(classification.label.toLowerCase());
+
+        setMoveBadge({
+          square: newMove.to,
+          classification: classification.label.toLowerCase(),
+          label: classification.label,
+          color: classification.color,
+          symbol
+        });
+
+        // Auto-hide badge after 5 seconds
+        // badgeTimeoutRef.current = setTimeout(() => {
+        //   setMoveBadge(null);
+        // }, 5000);
+      }
+
       if (showBestMove && !isGameOverPosition) setBestMove(bestMoveForNewPosition);
     } catch (err) {
       console.error('Analysis error:', err);
@@ -309,6 +371,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
       setCurrentEval(null);
       setLastMoveClassification(null);
       setLastMove(null);
+      setMoveBadge(null);
+      if (badgeTimeoutRef.current) {
+        clearTimeout(badgeTimeoutRef.current);
+      }
       return;
     }
 
@@ -386,9 +452,41 @@ export default function Analysis({ initialFen, onEditPosition }) {
         });
         // Set last move for highlighting
         setLastMove({ from: currentMove.from, to: currentMove.to });
+
+        // Set move badge on board square (Chess.com style)
+        if (currentMove.classification) {
+          // Clear any existing timeout
+          if (badgeTimeoutRef.current) {
+            clearTimeout(badgeTimeoutRef.current);
+          }
+
+          const classification = currentMove.classification;
+          const label = currentMove.classificationLabel;
+          const color = getClassificationColor(classification);
+          const symbol = getBadgeSymbol(classification);
+
+          setMoveBadge({
+            square: currentMove.to,
+            classification,
+            label,
+            color,
+            symbol
+          });
+
+          // Auto-hide badge after 5 seconds
+          badgeTimeoutRef.current = setTimeout(() => {
+            setMoveBadge(null);
+          }, 5000);
+        } else {
+          setMoveBadge(null);
+        }
       } else {
         setLastMoveClassification(null);
         setLastMove(null);
+        setMoveBadge(null);
+        if (badgeTimeoutRef.current) {
+          clearTimeout(badgeTimeoutRef.current);
+        }
       }
     } catch (error) {
       console.error('Error navigating to move:', error);
@@ -594,6 +692,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
               bestMove={bestMove}
               hoverMove={hoverMove}
               lastMove={lastMove}
+              moveBadge={moveBadge}
             />
             {!initialized && (
               <div className="absolute inset-0 flex items-center justify-center bg-slate-100/95 rounded-xl">

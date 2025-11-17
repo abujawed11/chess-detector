@@ -1198,23 +1198,36 @@ def classify_basic_move(
 # 4) "Miss" detection (tactical / concrete chance missed, but no self-harm)
 # ---------------------------------------------------------------------------
 
+# @dataclass
+# class MissParams:
+#     # We only call something Miss if the move itself didn't really damage the eval
+#     max_self_drop_cp: int = 80          # if mover worsens more than this, it's not a Miss
+
+#     # How big the missed opportunity must be (in mover POV)
+#     min_opportunity_cp: int = 250       # generic "big chance" threshold
+#     tactical_min_gain_cp: int = 350     # clear tactical/material win (~pawn+)
+
+#     # Bands for interpretation
+#     still_winning_cp: int = 300         # ≥ this is clearly winning
+#     equal_band_cp: int = 150           # |cp| ≤ this is "equalish"
+#     still_ok_cp: int = 120             # ≥ -this counts as drawable / OK
+
+#     # How much improvement counts as save / conversion
+#     min_save_gain_cp: int = 300        # for "missed save" (lost → drawable)
+#     min_conversion_gain_cp: int = 250  # small edge → big edge
+
 @dataclass
 class MissParams:
-    # We only call something Miss if the move itself didn't really damage the eval
-    max_self_drop_cp: int = 80          # if mover worsens more than this, it's not a Miss
+    max_self_drop_cp: int = 120        # was 80
+    min_opportunity_cp: int = 200      # was 250
+    tactical_min_gain_cp: int = 300    # was 350
 
-    # How big the missed opportunity must be (in mover POV)
-    min_opportunity_cp: int = 250       # generic "big chance" threshold
-    tactical_min_gain_cp: int = 350     # clear tactical/material win (~pawn+)
+    still_winning_cp: int = 300
+    equal_band_cp: int = 150          # tighter "equalish" zone, was 150
+    still_ok_cp: int = 120
 
-    # Bands for interpretation
-    still_winning_cp: int = 300         # ≥ this is clearly winning
-    equal_band_cp: int = 150           # |cp| ≤ this is "equalish"
-    still_ok_cp: int = 120             # ≥ -this counts as drawable / OK
-
-    # How much improvement counts as save / conversion
-    min_save_gain_cp: int = 300        # for "missed save" (lost → drawable)
-    min_conversion_gain_cp: int = 250  # small edge → big edge
+    min_save_gain_cp: int = 250       # was 300
+    min_conversion_gain_cp: int = 200 # was 250
 
 
 def detect_miss(
@@ -1270,7 +1283,8 @@ def detect_miss(
         return False
 
     # If the missed improvement is small, not a Miss.
-    if opportunity < params.min_opportunity_cp or miss_gap < params.min_opportunity_cp:
+    # if opportunity < params.min_opportunity_cp or miss_gap < params.min_opportunity_cp:
+    if opportunity < params.min_opportunity_cp and miss_gap < params.min_opportunity_cp:
         return False
 
     situation = situation_from_cp(before_pov)  # uses the same Won/Winning/Equalish/Worse/Lost mapping you already have

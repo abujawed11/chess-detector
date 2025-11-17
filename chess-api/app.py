@@ -609,8 +609,19 @@ async def evaluate_move(
             mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
 
         # --- General Miss detection ---
+        # is_miss = detect_miss(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     best_mate_in_plies=best_mate_in,
+        #     played_mate_in_plies=played_mate_in,
+        # )
+
+        # --- Miss detection (FIXED CALL) ---
         is_miss = detect_miss(
-            eval_before_white=eval_before_cp,
+            # IMPORTANT: use played-from-PRE eval here, not eval_before_cp
+            eval_before_white=played_eval_from_pre,
             eval_after_white=eval_after_cp,
             eval_best_white=best_eval_from_pre,
             mover_color=side_before,

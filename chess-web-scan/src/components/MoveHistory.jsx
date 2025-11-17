@@ -118,11 +118,7 @@ function MoveButton({ move, isActive, onClick }) {
   const classification = move.classification || 'best';
   const classificationLabel = move.classificationLabel || 'Best';
   const cpLoss = move.cpLoss ?? 0;
-  const symbol = getClassificationSymbol(classification);
   const color = getClassificationColor(classification);
-
-  // Determine if this is a special move worth highlighting
-  const isSpecial = ['brilliant', 'book', 'blunder', 'mistake'].includes(classification);
 
   // Build tooltip text
   const tooltipText = `${classificationLabel} (${cpLoss.toFixed(0)} cp loss)`;
@@ -133,86 +129,70 @@ function MoveButton({ move, isActive, onClick }) {
       title={tooltipText}
       style={{
         padding: '6px 8px',
-        border: isActive ? '2px solid #8b5cf6' : isSpecial ? `2px solid ${color}` : '2px solid transparent',
+        border: isActive ? '2px solid #10b981' : '2px solid transparent',
         borderRadius: 6,
-        background: isActive
-          ? '#ede9fe'
-          : isSpecial
-          ? `${color}10`  // Very light tint of classification color
-          : '#f9fafb',
+        background: isActive ? '#d1fae5' : '#ffffff',
         cursor: 'pointer',
         fontSize: 14,
-        fontWeight: isActive ? 600 : isSpecial ? 500 : 400,
+        fontWeight: isActive ? 600 : 500,
         textAlign: 'left',
         transition: 'all 0.2s',
-        color: color,
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 4
+        gap: 8
       }}
       onMouseEnter={(e) => {
         if (!isActive) {
-          e.currentTarget.style.background = isSpecial ? `${color}20` : '#f3f4f6';
+          e.currentTarget.style.background = '#f3f4f6';
+          e.currentTarget.style.border = '2px solid #e5e7eb';
         }
       }}
       onMouseLeave={(e) => {
         if (!isActive) {
-          e.currentTarget.style.background = isSpecial ? `${color}10` : '#f9fafb';
+          e.currentTarget.style.background = '#ffffff';
+          e.currentTarget.style.border = '2px solid transparent';
         }
       }}
     >
-      <span style={{ flex: 1 }}>
+      <span style={{
+        flex: 1,
+        color: isActive ? '#065f46' : '#1f2937',
+        fontWeight: isActive ? 600 : 500
+      }}>
         {move.san}
       </span>
 
-      {/* Symbol and CP loss */}
+      {/* Badge section: CP loss + Classification badge */}
       <span style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
-        fontSize: 11,
-        fontWeight: 700
+        gap: 6
       }}>
-        {symbol && <span>{symbol}</span>}
-
-        {/* Show CP loss for non-best moves */}
-        {cpLoss > 10 && (
+        {/* CP loss indicator */}
+        {cpLoss > 0 && (
           <span style={{
-            fontSize: 9,
-            opacity: 0.7,
-            fontWeight: 600
+            fontSize: 11,
+            fontWeight: 600,
+            color: isActive ? '#065f46' : '#64748b'
           }}>
-            ({cpLoss.toFixed(0)})
+            -{cpLoss.toFixed(0)}
           </span>
         )}
 
-        {/* Special badge for book/brilliant */}
-        {classification === 'book' && (
-          <span style={{
-            fontSize: 9,
-            padding: '1px 3px',
-            background: color,
-            color: '#fff',
-            borderRadius: 3,
-            fontWeight: 700
-          }}>
-            📖
-          </span>
-        )}
-        {classification === 'brilliant' && (
-          <span style={{
-            fontSize: 9,
-            padding: '1px 3px',
-            background: color,
-            color: '#fff',
-            borderRadius: 3,
-            fontWeight: 700
-          }}>
-            ‼
-          </span>
-        )}
+        {/* Classification badge */}
+        <span style={{
+          fontSize: 11,
+          padding: '2px 8px',
+          background: color,
+          color: '#fff',
+          borderRadius: 4,
+          fontWeight: 700,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+        }}>
+          {classificationLabel}
+        </span>
       </span>
     </button>
   );
