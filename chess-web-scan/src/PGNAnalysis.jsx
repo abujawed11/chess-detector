@@ -1846,6 +1846,9 @@ export default function PGNAnalysis() {
   const [lastMove, setLastMove] = useState(null);   // { from, to }
   const [analysisDepth, setAnalysisDepth] = useState(18); // Stockfish analysis depth
   const [fenCopied, setFenCopied] = useState(false); // Copy feedback state
+  const [showEngineHint, setShowEngineHint] = useState(false); // Toggle engine hints
+  const [bestMove, setBestMove] = useState(null); // Best move from engine
+  const [currentEval, setCurrentEval] = useState(null); // Current position evaluation
 
   const fileInputRef = useRef(null);
   const playIntervalRef = useRef(null);
@@ -2092,7 +2095,14 @@ export default function PGNAnalysis() {
     }
   }, [moves.length, navigateToMove]);
 
-  const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
+  const togglePlay = useCallback(() => {
+    setIsPlaying((p) => !p);
+    // Clear best move when starting to play
+    if (!isPlaying) {
+      setBestMove(null);
+    }
+  }, [isPlaying]);
+
   const stopPlaying = useCallback(() => {
     setIsPlaying(false);
     if (playIntervalRef.current) {
@@ -2112,6 +2122,49 @@ export default function PGNAnalysis() {
     }
   }, [currentPosition]);
 
+  // Analyze current position with engine
+  const analyzeCurrentPosition = useCallback(async () => {
+    if (!initialized || !showEngineHint) {
+      setBestMove(null);
+      return;
+    }
+
+    // Don't analyze if game is over
+    try {
+      const tempGame = new Chess(currentPosition);
+      if (tempGame.isGameOver()) {
+        setBestMove(null);
+        setCurrentEval(null);
+        return;
+      }
+    } catch (e) {
+      console.error('Error checking game over:', e);
+      return;
+    }
+
+    try {
+      const result = await analyze(currentPosition, { depth: analysisDepth, multiPV: 1 });
+      setCurrentEval(result.evaluation);
+      if (showEngineHint && result.lines && result.lines[0]) {
+        setBestMove(result.lines[0].pv[0]);
+      } else {
+        setBestMove(null);
+      }
+    } catch (err) {
+      console.error('Engine analysis error:', err);
+      setBestMove(null);
+    }
+  }, [initialized, showEngineHint, currentPosition, analyze, analysisDepth]);
+
+  // Analyze position when currentPosition or showEngineHint changes
+  useEffect(() => {
+    if (!isPlaying && showEngineHint && initialized) {
+      const timer = setTimeout(() => analyzeCurrentPosition(), 300);
+      return () => clearTimeout(timer);
+    } else if (!showEngineHint || isPlaying) {
+      setBestMove(null);
+    }
+  }, [currentPosition, showEngineHint, isPlaying, initialized, analyzeCurrentPosition]);
 
   // autoplay
   useEffect(() => {
@@ -2432,7 +2485,7 @@ export default function PGNAnalysis() {
           <InteractiveBoard
             fen={currentPosition}
             onMove={() => { }}
-            bestMove={null}
+            bestMove={bestMove}
             flipped={flipped}
             moveBadge={moveBadge}
             lastMove={lastMove}
@@ -2528,6 +2581,22 @@ export default function PGNAnalysis() {
               >
                 {fenCopied ? '✓ Copied!' : '📋 Copy FEN'}
               </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowEngineHint(!showEngineHint);
+                }}
+                disabled={isPlaying}
+                className={`rounded-lg px-4 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:from-slate-300 disabled:to-slate-400 ${
+                  showEngineHint
+                    ? 'bg-gradient-to-br from-green-500 to-green-600'
+                    : 'bg-gradient-to-br from-slate-500 to-slate-600'
+                }`}
+                title={`${showEngineHint ? 'Hide' : 'Show'} engine hint (enabled when paused)`}
+              >
+                {showEngineHint ? '🔍 Hide Hint' : '💡 Show Hint'}
+              </button>
             </div>
 
             <div className="flex items-center justify-center gap-3 rounded-lg bg-slate-50 px-4 py-3 shadow-inner">
@@ -2562,6 +2631,20 @@ export default function PGNAnalysis() {
             <div className="text-center text-sm font-medium text-slate-600">
               Move {currentMoveIndex + 1} of {moves.length}
             </div>
+
+            {/* Engine Evaluation Display */}
+            {showEngineHint && currentEval && (
+              <div className="mt-3 rounded-lg border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 px-4 py-2 text-center shadow-sm">
+                <div className="text-xs font-semibold text-slate-600">Engine Evaluation</div>
+                <div className="text-lg font-bold text-green-700">
+                  {currentEval.type === 'mate'
+                    ? `Mate in ${Math.abs(currentEval.value)}`
+                    : currentEval.type === 'cp'
+                    ? (currentEval.value / 100).toFixed(2)
+                    : '0.00'}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Legend: symbols for each move type */}
