@@ -1215,40 +1215,42 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   copyFEN();
                 }}
-                disabled={isPlaying || enableCustomMoves}
+                disabled={isPlaying}
                 onMouseEnter={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: (isPlaying || enableCustomMoves)
+                  background: isPlaying
                     ? '#cbd5e1'
+                    : fenCopied
+                    ? 'linear-gradient(135deg, #10b981, #059669)'
                     : 'linear-gradient(135deg, #14b8a6, #0891b2)',
-                  opacity: (isPlaying || enableCustomMoves) ? 0.4 : 1,
-                  cursor: (isPlaying || enableCustomMoves) ? 'not-allowed' : 'pointer',
-                  boxShadow: (isPlaying || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: isPlaying ? 0.4 : 1,
+                  cursor: isPlaying ? 'not-allowed' : 'pointer',
+                  boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl px-5 py-3 font-semibold text-white"
-                title="Copy FEN (enabled when paused)"
+                title="Copy FEN"
               >
                 {fenCopied ? '✓ Copied!' : '📋 Copy FEN'}
               </button>
@@ -1258,42 +1260,42 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   setShowEngineHint(!showEngineHint);
                 }}
-                disabled={isPlaying || enableCustomMoves}
+                disabled={isPlaying}
                 onMouseEnter={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (!isPlaying && !enableCustomMoves) {
+                  if (!isPlaying) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: (isPlaying || enableCustomMoves)
+                  background: isPlaying
                     ? '#cbd5e1'
                     : showEngineHint
                     ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
                     : 'linear-gradient(135deg, #64748b, #475569)',
-                  opacity: (isPlaying || enableCustomMoves) ? 0.4 : 1,
-                  cursor: (isPlaying || enableCustomMoves) ? 'not-allowed' : 'pointer',
-                  boxShadow: (isPlaying || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: isPlaying ? 0.4 : 1,
+                  cursor: isPlaying ? 'not-allowed' : 'pointer',
+                  boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl px-5 py-3 font-semibold text-white"
-                title={`${showEngineHint ? 'Hide' : 'Show'} engine hint (enabled when paused)`}
+                title={`${showEngineHint ? 'Hide' : 'Show'} engine hint`}
               >
                 {showEngineHint ? '🔍 Hide Hint' : '💡 Show Hint'}
               </button>
