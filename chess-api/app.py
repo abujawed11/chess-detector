@@ -673,18 +673,21 @@ async def evaluate_move(
         print("Miss detected:", is_miss)
 
         # --- Book detection (custom opening DB) ---
-        in_opening_db = is_book_move(fen_before, move)  # move is UCI string
-        is_book = detect_book_move(
-            fullmove_number=fullmove_number,
-            eval_before_white=eval_before_cp,
-            eval_after_white=eval_after_cp,
-            cpl=cpl,
-            multipv_rank=multipv_rank,
-            in_opening_db=in_opening_db,
-        )
 
-        print("is_book: ", is_book)
-        print("in_opening_db:", in_opening_db)
+        book_for_move = is_book_move(fen_before, move)  # move is UCI string
+
+
+        # in_opening_db = is_book_move(fen_before, move)  # move is UCI string
+        # is_book = detect_book_move(
+        #     fullmove_number=fullmove_number,
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     cpl=cpl,
+        #     multipv_rank=multipv_rank,
+        #     in_opening_db=in_opening_db,
+        # )
+
+        print("is_book: ", book_for_move)
 
         # --- OLD general exclam logic (defensive brilliancy, mate-flip, etc.) ---
         exclam_label, brill_info = classify_exclam_move(
@@ -693,7 +696,7 @@ async def evaluate_move(
             eval_best_white=best_eval_from_pre,
             mover_color=side_before,
             is_sacrifice=is_sacrifice,
-            is_book=is_book,
+            is_book=book_for_move,
             multipv_rank=multipv_rank,
             played_eval_from_pre_white=played_eval_from_pre,
             best_mate_in_plies_pre=best_mate_in,
@@ -719,7 +722,7 @@ async def evaluate_move(
 
         # --- Final label priority:
         # Book > mate-flip Blunder > sac-based Brilliant > general exclam (Brilliant/Great) > Miss > basic
-        if in_opening_db:
+        if book_for_move:
             label = "Book"
         elif exclam_label == "Blunder":
             label = "Blunder"   # mate-flip catastrophe
@@ -763,7 +766,8 @@ async def evaluate_move(
             "mate_flip_severity": mate_flip_severity,
             "basic_label": basic_label,
             "miss_detected": is_miss,
-            "is_book": is_book,
+            "is_book": book_for_move,
+            "in_opening_db": book_for_move,  # Raw book detection flag
             "exclam_label": exclam_label,
             "brilliancy_info": brill_info.__dict__ if brill_info else None,
             "sac_brilliancy": sac_brill.__dict__,         # NEW: reason + adv values

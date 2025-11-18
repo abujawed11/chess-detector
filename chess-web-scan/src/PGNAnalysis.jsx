@@ -77,6 +77,9 @@ export default function PGNAnalysis() {
   const [showEngineHint, setShowEngineHint] = useState(false); // Toggle engine hints
   const [bestMove, setBestMove] = useState(null); // Best move from engine
   const [currentEval, setCurrentEval] = useState(null); // Current position evaluation
+  const [enableCustomMoves, setEnableCustomMoves] = useState(false); // Toggle custom moves mode
+  const [savedPosition, setSavedPosition] = useState(null); // Saved position when custom moves enabled
+  const [customGame, setCustomGame] = useState(null); // Chess instance for custom moves
 
   const fileInputRef = useRef(null);
   const playIntervalRef = useRef(null);
@@ -350,6 +353,52 @@ export default function PGNAnalysis() {
     }
   }, [currentPosition]);
 
+  // Toggle custom moves mode
+  const toggleEnableMoves = useCallback(() => {
+    if (!enableCustomMoves) {
+      // Enabling custom moves: save current position and create custom game
+      setSavedPosition(currentPosition);
+      const newCustomGame = new Chess(currentPosition);
+      setCustomGame(newCustomGame);
+      setEnableCustomMoves(true);
+      // Clear best move and hints when entering custom move mode
+      setBestMove(null);
+      setShowEngineHint(false);
+      console.log('✅ Custom moves enabled. Position saved:', currentPosition);
+    } else {
+      // Disabling custom moves: restore saved position
+      if (savedPosition) {
+        setCurrentPosition(savedPosition);
+        console.log('✅ Custom moves disabled. Position restored:', savedPosition);
+      }
+      setSavedPosition(null);
+      setCustomGame(null);
+      setEnableCustomMoves(false);
+      setLastMove(null);
+      setMoveBadge(null);
+    }
+  }, [enableCustomMoves, currentPosition, savedPosition]);
+
+  // Handle custom moves when in custom move mode
+  const handleCustomMove = useCallback((from, to) => {
+    if (!enableCustomMoves || !customGame) return false;
+
+    try {
+      // Try to make the move
+      const move = customGame.move({ from, to, promotion: 'q' });
+      if (move) {
+        // Update the position
+        setCurrentPosition(customGame.fen());
+        setLastMove({ from: move.from, to: move.to });
+        console.log('✅ Custom move made:', move.san);
+        return true;
+      }
+    } catch (err) {
+      console.error('❌ Invalid move:', err);
+    }
+    return false;
+  }, [enableCustomMoves, customGame]);
+
   // Analyze current position with engine
   const analyzeCurrentPosition = useCallback(async () => {
     if (!initialized || !showEngineHint) {
@@ -427,6 +476,9 @@ export default function PGNAnalysis() {
   // keyboard
   useEffect(() => {
     const onKey = (e) => {
+      // Disable keyboard shortcuts when custom moves are enabled
+      if (enableCustomMoves) return;
+
       if (e.key === 'ArrowLeft') {
         stopPlaying();
         goToPrevious();
@@ -450,7 +502,7 @@ export default function PGNAnalysis() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [goToPrevious, goToNext, goToStart, goToEnd, stopPlaying, togglePlay]);
+  }, [goToPrevious, goToNext, goToStart, goToEnd, stopPlaying, togglePlay, enableCustomMoves]);
 
   // move rows
   const rows = useMemo(() => {
@@ -755,13 +807,34 @@ export default function PGNAnalysis() {
           {/* <div className="w-full max-w-[520px]"> */}
           <InteractiveBoard
             fen={currentPosition}
-            onMove={() => { }}
+            onMove={enableCustomMoves ? handleCustomMove : () => { }}
             bestMove={bestMove}
             flipped={flipped}
             moveBadge={moveBadge}
             lastMove={lastMove}
+            interactive={enableCustomMoves}
           />
           {/* </div> */}
+
+          {/* Custom moves mode indicator */}
+          {enableCustomMoves && (
+            <div className="mt-3 w-full max-w-[520px] rounded-lg border-2 border-orange-400 bg-linear-to-r from-orange-50 to-amber-50 px-4 py-3 shadow-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold text-orange-900">
+                    ♟️ Custom Moves Mode Active
+                  </div>
+                  <div className="text-xs text-orange-700">
+                    Play your own moves. Click "Disable Moves" to return to saved position.
+                  </div>
+                </div>
+                <div className="flex h-3 w-3 items-center justify-center">
+                  <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500"></span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Controls under board */}
           <div className="mt-4 w-full max-w-[520px] space-y-3">
@@ -772,36 +845,36 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   goToStart();
                 }}
-                disabled={currentMoveIndex === -1}
+                disabled={currentMoveIndex === -1 || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: currentMoveIndex === -1
+                  background: (currentMoveIndex === -1 || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #475569, #334155)',
-                  opacity: currentMoveIndex === -1 ? 0.4 : 1,
-                  cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
-                  boxShadow: currentMoveIndex === -1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: (currentMoveIndex === -1 || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (currentMoveIndex === -1 || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (currentMoveIndex === -1 || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl p-3.5 font-bold text-white"
@@ -816,36 +889,36 @@ export default function PGNAnalysis() {
                   stopPlaying();
                   goToPrevious();
                 }}
-                disabled={currentMoveIndex === -1}
+                disabled={currentMoveIndex === -1 || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (currentMoveIndex !== -1) {
+                  if (currentMoveIndex !== -1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: currentMoveIndex === -1
+                  background: (currentMoveIndex === -1 || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  opacity: currentMoveIndex === -1 ? 0.4 : 1,
-                  cursor: currentMoveIndex === -1 ? 'not-allowed' : 'pointer',
-                  boxShadow: currentMoveIndex === -1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: (currentMoveIndex === -1 || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (currentMoveIndex === -1 || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (currentMoveIndex === -1 || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl p-3.5 font-bold text-white"
@@ -859,36 +932,36 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   togglePlay();
                 }}
-                disabled={moves.length === 0}
+                disabled={moves.length === 0 || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (moves.length !== 0) {
+                  if (moves.length !== 0 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.3), 0 12px 24px -8px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (moves.length !== 0) {
+                  if (moves.length !== 0 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (moves.length !== 0) {
+                  if (moves.length !== 0 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (moves.length !== 0) {
+                  if (moves.length !== 0 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: moves.length === 0
+                  background: (moves.length === 0 || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #10b981, #059669)',
-                  opacity: moves.length === 0 ? 0.4 : 1,
-                  cursor: moves.length === 0 ? 'not-allowed' : 'pointer',
-                  boxShadow: moves.length === 0 ? 'none' : '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+                  opacity: (moves.length === 0 || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (moves.length === 0 || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (moves.length === 0 || enableCustomMoves) ? 'none' : '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-2xl px-8 py-4 text-lg font-bold text-white"
@@ -903,36 +976,36 @@ export default function PGNAnalysis() {
                   stopPlaying();
                   goToNext();
                 }}
-                disabled={currentMoveIndex >= moves.length - 1}
+                disabled={currentMoveIndex >= moves.length - 1 || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: currentMoveIndex >= moves.length - 1
+                  background: (currentMoveIndex >= moves.length - 1 || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  opacity: currentMoveIndex >= moves.length - 1 ? 0.4 : 1,
-                  cursor: currentMoveIndex >= moves.length - 1 ? 'not-allowed' : 'pointer',
-                  boxShadow: currentMoveIndex >= moves.length - 1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl p-3.5 font-bold text-white"
@@ -946,36 +1019,36 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   goToEnd();
                 }}
-                disabled={currentMoveIndex >= moves.length - 1}
+                disabled={currentMoveIndex >= moves.length - 1 || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (currentMoveIndex < moves.length - 1) {
+                  if (currentMoveIndex < moves.length - 1 && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: currentMoveIndex >= moves.length - 1
+                  background: (currentMoveIndex >= moves.length - 1 || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #475569, #334155)',
-                  opacity: currentMoveIndex >= moves.length - 1 ? 0.4 : 1,
-                  cursor: currentMoveIndex >= moves.length - 1 ? 'not-allowed' : 'pointer',
-                  boxShadow: currentMoveIndex >= moves.length - 1 ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (currentMoveIndex >= moves.length - 1 || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl p-3.5 font-bold text-white"
@@ -1020,36 +1093,36 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   copyFEN();
                 }}
-                disabled={isPlaying}
+                disabled={isPlaying || enableCustomMoves}
                 onMouseEnter={(e) => {
-                  if (!isPlaying) {
+                  if (!isPlaying && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                     e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isPlaying) {
+                  if (!isPlaying && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
                 }}
                 onMouseDown={(e) => {
-                  if (!isPlaying) {
+                  if (!isPlaying && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(0.95)';
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (!isPlaying) {
+                  if (!isPlaying && !enableCustomMoves) {
                     e.currentTarget.style.transform = 'scale(1.1)';
                   }
                 }}
                 style={{
-                  background: isPlaying
+                  background: (isPlaying || enableCustomMoves)
                     ? '#cbd5e1'
                     : 'linear-gradient(135deg, #14b8a6, #0891b2)',
-                  opacity: isPlaying ? 0.4 : 1,
-                  cursor: isPlaying ? 'not-allowed' : 'pointer',
-                  boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  opacity: (isPlaying || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (isPlaying || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (isPlaying || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl px-5 py-3 font-semibold text-white"
@@ -1063,6 +1136,51 @@ export default function PGNAnalysis() {
                   e.preventDefault();
                   setShowEngineHint(!showEngineHint);
                 }}
+                disabled={isPlaying || enableCustomMoves}
+                onMouseEnter={(e) => {
+                  if (!isPlaying && !enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isPlaying && !enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (!isPlaying && !enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (!isPlaying && !enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: (isPlaying || enableCustomMoves)
+                    ? '#cbd5e1'
+                    : showEngineHint
+                    ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
+                    : 'linear-gradient(135deg, #64748b, #475569)',
+                  opacity: (isPlaying || enableCustomMoves) ? 0.4 : 1,
+                  cursor: (isPlaying || enableCustomMoves) ? 'not-allowed' : 'pointer',
+                  boxShadow: (isPlaying || enableCustomMoves) ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl px-5 py-3 font-semibold text-white"
+                title={`${showEngineHint ? 'Hide' : 'Show'} engine hint (enabled when paused)`}
+              >
+                {showEngineHint ? '🔍 Hide Hint' : '💡 Show Hint'}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleEnableMoves();
+                }}
                 disabled={isPlaying}
                 onMouseEnter={(e) => {
                   if (!isPlaying) {
@@ -1089,18 +1207,18 @@ export default function PGNAnalysis() {
                 style={{
                   background: isPlaying
                     ? '#cbd5e1'
-                    : showEngineHint
-                    ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
-                    : 'linear-gradient(135deg, #64748b, #475569)',
+                    : enableCustomMoves
+                    ? 'linear-gradient(135deg, #f97316, #ea580c)'
+                    : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
                   opacity: isPlaying ? 0.4 : 1,
                   cursor: isPlaying ? 'not-allowed' : 'pointer',
                   boxShadow: isPlaying ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
                   transition: 'all 0.2s ease'
                 }}
                 className="rounded-xl px-5 py-3 font-semibold text-white"
-                title={`${showEngineHint ? 'Hide' : 'Show'} engine hint (enabled when paused)`}
+                title={`${enableCustomMoves ? 'Disable' : 'Enable'} custom moves (play your own moves from current position)`}
               >
-                {showEngineHint ? '🔍 Hide Hint' : '💡 Show Hint'}
+                {enableCustomMoves ? '🔒 Disable Moves' : '♟️ Enable Moves'}
               </button>
             </div>
 

@@ -6,7 +6,7 @@ import chess.polyglot
 
 # Path to your polyglot book file
 # Adjust this path if your book is in a different location
-BOOK_PATH = os.path.join(os.path.dirname(__file__), "..", "engine", "book.bin")
+BOOK_PATH = os.path.join(os.path.dirname(__file__), "..", "engine", "gm2001.bin")
 
 # Cache the book object
 _book = None
@@ -19,65 +19,72 @@ def get_book():
     """
     global _book
 
-    print(f"[OPENING_BOOK] TRYING TO LOAD BOOK FROM: {BOOK_PATH}")
-
     if _book is None:
+        print(f"[OPENING_BOOK] Loading book from: {BOOK_PATH}")
+
         if not os.path.exists(BOOK_PATH):
             print(f"[OPENING_BOOK] ❌ Book file NOT FOUND at: {BOOK_PATH}")
+            return None
+
+        try:
+            _book = chess.polyglot.MemoryMappedReader(BOOK_PATH)
+            print(f"[OPENING_BOOK] ✅ Book loaded successfully ({os.path.getsize(BOOK_PATH) / (1024*1024):.1f} MB)")
+        except Exception as e:
+            print(f"[OPENING_BOOK] ❌ Failed to load book: {e}")
             _book = None
-        else:
-            try:
-                print(f"[OPENING_BOOK] ✅ Loading polyglot book...")
-                _book = chess.polyglot.MemoryMappedReader(BOOK_PATH)
-                print(f"[OPENING_BOOK] ✅ Book loaded successfully!")
-            except Exception as e:
-                print(f"[OPENING_BOOK] ❌ Failed to load book: {e}")
-                _book = None
 
     return _book
 
 
 def is_book_move(fen: str, uci_move: str) -> bool:
-    """
-    Return True if this (FEN, move) pair appears in the Polyglot opening book.
-
-    - fen: full FEN string of the PRE-move position
-    - uci_move: move in UCI format, e.g. "e2e4"
-    """
-
     book = get_book()
     if book is None:
-        print("[OPENING_BOOK] ⚠️ Book not loaded; treating as NOT book move.")
+        print(f"[OPENING_BOOK] is_book_move: book missing → False")
         return False
 
-    board = chess.Board(fen)
-    move = chess.Move.from_uci(uci_move)
-
-    print(f"\n[OPENING_BOOK] ------------------------------")
-    print(f"[OPENING_BOOK] Checking FEN:")
-    print(f"{fen}")
-    print(f"[OPENING_BOOK] Checking move: {uci_move}")
-    print(f"[OPENING_BOOK] ------------------------------")
-
     try:
-        found_any_entry = False
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(uci_move)
 
         for entry in book.find_all(board):
-            found_any_entry = True
-            entry_move = entry.move.uci()
-            print(f"[OPENING_BOOK] Found book move in DB: {entry_move}")
-
             if entry.move == move:
-                print(f"[OPENING_BOOK] 🎉 MATCH! This move IS in the opening book.")
+                print(f"[OPENING_BOOK] is_book_move({uci_move}) = True for FEN:")
+                print(f"  {fen}")
                 return True
 
-        if not found_any_entry:
-            print(f"[OPENING_BOOK] No book entries found for this position.")
-        else:
-            print(f"[OPENING_BOOK] ❌ No match for move {uci_move} in book entries.")
-
+        print(f"[OPENING_BOOK] is_book_move({uci_move}) = False for FEN:")
+        print(f"  {fen}")
         return False
 
     except Exception as e:
-        print(f"[OPENING_BOOK] ❌ Error scanning book: {e}")
+        print(f"[OPENING_BOOK] ❌ Error checking move {uci_move}: {e}")
         return False
+
+
+
+
+# def is_book_move(fen: str, uci_move: str) -> bool:
+#     """
+#     Return True if this (FEN, move) pair appears in the Polyglot opening book.
+
+#     - fen: full FEN string of the PRE-move position
+#     - uci_move: move in UCI format, e.g. "e2e4"
+#     """
+#     book = get_book()
+#     if book is None:
+#         return False
+
+#     try:
+#         board = chess.Board(fen)
+#         move = chess.Move.from_uci(uci_move)
+
+#         # Check if move is in book for this position
+#         for entry in book.find_all(board):
+#             if entry.move == move:
+#                 return True
+
+#         return False
+
+#     except Exception as e:
+#         print(f"[OPENING_BOOK] ❌ Error checking move {uci_move}: {e}")
+#         return False
