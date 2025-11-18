@@ -82,6 +82,8 @@ export default function PGNAnalysis() {
   const [customGame, setCustomGame] = useState(null); // Chess instance for custom moves
   const [customMoveHistory, setCustomMoveHistory] = useState([]); // History of custom moves
   const [customMoveIndex, setCustomMoveIndex] = useState(-1); // Current index in custom move history
+  const [enableEngineEvaluate, setEnableEngineEvaluate] = useState(false); // Toggle engine evaluation for custom moves
+  const [customMoveEvaluations, setCustomMoveEvaluations] = useState({}); // Store evaluations for custom moves
 
   const fileInputRef = useRef(null);
   const playIntervalRef = useRef(null);
@@ -309,10 +311,24 @@ export default function PGNAnalysis() {
       customGame.load(fen);
     }
 
-    // Clear last move highlight when navigating
-    setLastMove(null);
+    // Restore evaluation badge if it exists for this move
+    const evaluation = customMoveEvaluations[index];
+    if (evaluation && evaluation.moveResult) {
+      setLastMove({ from: evaluation.moveResult.from, to: evaluation.moveResult.to });
+      setMoveBadge({
+        square: evaluation.moveResult.to,
+        classification: evaluation.label.toLowerCase(),
+        label: evaluation.label,
+        color: evaluation.badge.color,
+        symbol: evaluation.badge.symbol
+      });
+    } else {
+      setLastMove(null);
+      setMoveBadge(null);
+    }
+
     console.log(`✅ Navigated to custom move ${index}`);
-  }, [customMoveHistory, customGame]);
+  }, [customMoveHistory, customGame, customMoveEvaluations]);
 
   const goToStart = useCallback(() => {
     if (enableCustomMoves) {
@@ -417,35 +433,77 @@ export default function PGNAnalysis() {
       setEnableCustomMoves(false);
       setCustomMoveHistory([]);
       setCustomMoveIndex(-1);
+      setEnableEngineEvaluate(false); // Disable engine evaluate when exiting custom mode
+      setCustomMoveEvaluations({}); // Clear all evaluations
       setLastMove(null);
       setMoveBadge(null);
     }
   }, [enableCustomMoves, currentPosition, savedPosition]);
 
   // Handle custom moves when in custom move mode
-  const handleCustomMove = useCallback((moveResult, newFen) => {
+  const handleCustomMove = useCallback(async (moveResult, newFen) => {
     if (!enableCustomMoves || !customGame) return false;
 
     try {
+      // Get the FEN BEFORE the move for evaluation
+      const fenBefore = customGame.fen();
+      const uciMove = moveResult.from + moveResult.to + (moveResult.promotion || '');
+
       // InteractiveBoard already made the move, so we just sync our customGame
       customGame.load(newFen);
       setCurrentPosition(newFen);
       setLastMove({ from: moveResult.from, to: moveResult.to });
 
       // Add to custom move history (remove any future moves if we're not at the end)
+      const newIndex = customMoveIndex + 1;
       setCustomMoveHistory(prev => {
         const newHistory = prev.slice(0, customMoveIndex + 1);
         return [...newHistory, newFen];
       });
-      setCustomMoveIndex(prev => prev + 1);
+      setCustomMoveIndex(newIndex);
 
       console.log('✅ Custom move made:', moveResult.san);
+
+      // Evaluate the move if engine evaluate is enabled
+      if (enableEngineEvaluate) {
+        console.log('🔍 Evaluating custom move...');
+        try {
+          const evaluation = await evaluateMove(fenBefore, uciMove, analysisDepth, 5);
+          const badge = getMoveBadge(evaluation);
+
+          // Store evaluation for this move
+          setCustomMoveEvaluations(prev => ({
+            ...prev,
+            [newIndex]: {
+              ...evaluation,
+              badge,
+              moveResult,
+              fenBefore,
+              fenAfter: newFen
+            }
+          }));
+
+          // Show badge on the board
+          setMoveBadge({
+            square: moveResult.to,
+            classification: evaluation.label.toLowerCase(),
+            label: evaluation.label,
+            color: badge.color,
+            symbol: badge.symbol
+          });
+
+          console.log(`✅ Evaluation: ${evaluation.label} (CPL: ${evaluation.cpl})`);
+        } catch (evalError) {
+          console.error('❌ Failed to evaluate move:', evalError);
+        }
+      }
+
       return true;
     } catch (err) {
       console.error('❌ Invalid move:', err);
     }
     return false;
-  }, [enableCustomMoves, customGame, customMoveIndex]);
+  }, [enableCustomMoves, customGame, customMoveIndex, enableEngineEvaluate, analysisDepth]);
 
   // Analyze current position with engine
   const analyzeCurrentPosition = useCallback(async () => {
@@ -1284,6 +1342,51 @@ export default function PGNAnalysis() {
               >
                 {enableCustomMoves ? '🔒 Disable Moves' : '♟️ Enable Moves'}
               </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setEnableEngineEvaluate(prev => !prev);
+                }}
+                disabled={!enableCustomMoves}
+                onMouseEnter={(e) => {
+                  if (enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (enableCustomMoves) {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }
+                }}
+                style={{
+                  background: !enableCustomMoves
+                    ? '#cbd5e1'
+                    : enableEngineEvaluate
+                    ? 'linear-gradient(135deg, #10b981, #059669)'
+                    : 'linear-gradient(135deg, #64748b, #475569)',
+                  opacity: !enableCustomMoves ? 0.4 : 1,
+                  cursor: !enableCustomMoves ? 'not-allowed' : 'pointer',
+                  boxShadow: !enableCustomMoves ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s ease'
+                }}
+                className="rounded-xl px-5 py-3 font-semibold text-white"
+                title={`${enableEngineEvaluate ? 'Disable' : 'Enable'} engine evaluation (evaluates each custom move you play)`}
+              >
+                {enableEngineEvaluate ? '⚙️ Engine: ON' : '⚙️ Engine: OFF'}
+              </button>
             </div>
 
             <div className="flex items-center justify-center gap-3 rounded-lg bg-slate-50 px-4 py-3 shadow-inner">
@@ -1432,16 +1535,41 @@ export default function PGNAnalysis() {
 
           {/* Column 3: Move Evaluation Details + Legend */}
           <div className="flex flex-col gap-4">
-            {/* Detailed Move Evaluation Data */}
-            {currentMoveIndex >= 0 && analyzedMoves[currentMoveIndex]?.fullEvaluation && (
+            {/* Custom Move Evaluation Data (when in custom mode) */}
+            {enableCustomMoves && customMoveIndex > 0 && customMoveEvaluations[customMoveIndex] && (
+              <MoveDetailsPanel
+                moveData={customMoveEvaluations[customMoveIndex]}
+                visible={true}
+              />
+            )}
+
+            {/* Detailed Move Evaluation Data (for analyzed PGN games) */}
+            {!enableCustomMoves && currentMoveIndex >= 0 && analyzedMoves[currentMoveIndex]?.fullEvaluation && (
               <MoveDetailsPanel
                 moveData={analyzedMoves[currentMoveIndex].fullEvaluation}
                 visible={true}
               />
             )}
 
-            {/* Move Explanation Card */}
-            {currentMoveIndex >= 0 &&
+            {/* Move Explanation Card for Custom Moves */}
+            {enableCustomMoves && customMoveIndex > 0 && customMoveEvaluations[customMoveIndex] && (
+              <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-4 shadow-sm">
+                <h3 className="mb-3 text-lg font-bold text-emerald-800">
+                  Move Explanation
+                </h3>
+                <MoveExplanationCard
+                  moveNumber={customMoveIndex}
+                  playerName="You"
+                  playerMove={customMoveEvaluations[customMoveIndex].moveResult?.san || 'Move'}
+                  classification={customMoveEvaluations[customMoveIndex].label?.toLowerCase() || 'unknown'}
+                  explanation={getMoveExplanation(customMoveEvaluations[customMoveIndex])}
+                  showDetails={true}
+                />
+              </div>
+            )}
+
+            {/* Move Explanation Card for Analyzed Games */}
+            {!enableCustomMoves && currentMoveIndex >= 0 &&
               analyzedMoves[currentMoveIndex] &&
               analyzedMoves[currentMoveIndex].explanation && (
               <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-4 shadow-sm">
@@ -1469,9 +1597,15 @@ export default function PGNAnalysis() {
               </div>
             )}
 
-            {currentMoveIndex < 0 && (
+            {!enableCustomMoves && currentMoveIndex < 0 && (
               <p className="rounded-lg bg-slate-100 p-4 text-sm text-slate-600">
                 Click on a move from the move list to see detailed evaluation and explanation.
+              </p>
+            )}
+
+            {enableCustomMoves && customMoveIndex === 0 && (
+              <p className="rounded-lg bg-slate-100 p-4 text-sm text-slate-600">
+                Play a move to see evaluation (make sure Engine Evaluate is ON).
               </p>
             )}
           </div>
