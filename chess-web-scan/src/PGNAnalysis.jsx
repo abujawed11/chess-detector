@@ -90,7 +90,7 @@ export default function PGNAnalysis() {
   const listContainerRef = useRef(null);
   const badgeTimeoutRef = useRef(null);
 
-  const { initialized, analyze } = useStockfish();
+  const { initialized, analyze, stop: stopHintAnalysis } = useStockfish();
 
   // Cleanup engine on component unmount
   useEffect(() => {
@@ -311,6 +311,12 @@ export default function PGNAnalysis() {
       customGame.load(fen);
     }
 
+    // Clear any existing badge timeout (from PGN analysis)
+    if (badgeTimeoutRef.current) {
+      clearTimeout(badgeTimeoutRef.current);
+      badgeTimeoutRef.current = null;
+    }
+
     // Restore evaluation badge if it exists for this move
     const evaluation = customMoveEvaluations[index];
     if (evaluation && evaluation.moveResult) {
@@ -322,6 +328,7 @@ export default function PGNAnalysis() {
         color: evaluation.badge.color,
         symbol: evaluation.badge.symbol
       });
+      // Custom move badges persist (no timeout)
     } else {
       setLastMove(null);
       setMoveBadge(null);
@@ -467,6 +474,13 @@ export default function PGNAnalysis() {
       // Evaluate the move if engine evaluate is enabled
       if (enableEngineEvaluate) {
         console.log('🔍 Evaluating custom move...');
+
+        // Cancel any pending hint analysis to avoid backend queue congestion
+        if (showEngineHint) {
+          console.log('⏸️ Pausing hint analysis for move evaluation...');
+          stopHintAnalysis();
+        }
+
         try {
           const evaluation = await evaluateMove(fenBefore, uciMove, analysisDepth, 5);
           const badge = getMoveBadge(evaluation);
@@ -483,7 +497,13 @@ export default function PGNAnalysis() {
             }
           }));
 
-          // Show badge on the board
+          // Clear any existing badge timeout before showing new badge
+          if (badgeTimeoutRef.current) {
+            clearTimeout(badgeTimeoutRef.current);
+            badgeTimeoutRef.current = null;
+          }
+
+          // Show badge on the board (persists, no timeout for custom moves)
           setMoveBadge({
             square: moveResult.to,
             classification: evaluation.label.toLowerCase(),
@@ -493,6 +513,11 @@ export default function PGNAnalysis() {
           });
 
           console.log(`✅ Evaluation: ${evaluation.label} (CPL: ${evaluation.cpl})`);
+
+          // Hint analysis will automatically restart via useEffect when position updates
+          if (showEngineHint) {
+            console.log('▶️ Move evaluation complete, hint analysis will resume automatically');
+          }
         } catch (evalError) {
           console.error('❌ Failed to evaluate move:', evalError);
         }
@@ -503,7 +528,7 @@ export default function PGNAnalysis() {
       console.error('❌ Invalid move:', err);
     }
     return false;
-  }, [enableCustomMoves, customGame, customMoveIndex, enableEngineEvaluate, analysisDepth]);
+  }, [enableCustomMoves, customGame, customMoveIndex, enableEngineEvaluate, analysisDepth, showEngineHint, stopHintAnalysis]);
 
   // Analyze current position with engine
   const analyzeCurrentPosition = useCallback(async () => {

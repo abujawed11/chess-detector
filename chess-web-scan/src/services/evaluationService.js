@@ -91,14 +91,14 @@ export function getMoveBadge(evaluation) {
   const badgeStyles = {
     'Brilliant': { symbol: '!!', color: '#1baca6', icon: '💎' },
     'Great': { symbol: '!', color: '#5c9fc4', icon: '⭐' },
-    'Best': { symbol: '', color: '#96bc4b', icon: '✓' },
-    'Excellent': { symbol: '', color: '#9bc02a', icon: '✨' },  // Added Excellent
-    'Good': { symbol: '', color: '#96af8b', icon: '' },
-    'Book': { symbol: '', color: '#a88865', icon: '📖' },
+    'Best': { symbol: '!', color: '#96bc4b', icon: '✓' },
+    'Excellent': { symbol: '!?', color: '#9bc02a', icon: '✨' },
+    'Good': { symbol: '✓', color: '#96af8b', icon: '' },
+    'Book': { symbol: '⏺', color: '#a88865', icon: '📖' },
     'Inaccuracy': { symbol: '?!', color: '#f0c15c', icon: '⚠️' },
     'Mistake': { symbol: '?', color: '#e58f2b', icon: '❌' },
     'Blunder': { symbol: '??', color: '#ca3431', icon: '💥' },
-    'Miss': { symbol: '?!', color: '#f0c15c', icon: '👁️' }
+    'Miss': { symbol: '❌', color: '#f0c15c', icon: '👁️' }
   };
 
   const style = badgeStyles[label] || badgeStyles['Good'];
