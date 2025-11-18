@@ -380,19 +380,16 @@ export default function PGNAnalysis() {
   }, [enableCustomMoves, currentPosition, savedPosition]);
 
   // Handle custom moves when in custom move mode
-  const handleCustomMove = useCallback((from, to) => {
+  const handleCustomMove = useCallback((moveResult, newFen) => {
     if (!enableCustomMoves || !customGame) return false;
 
     try {
-      // Try to make the move
-      const move = customGame.move({ from, to, promotion: 'q' });
-      if (move) {
-        // Update the position
-        setCurrentPosition(customGame.fen());
-        setLastMove({ from: move.from, to: move.to });
-        console.log('✅ Custom move made:', move.san);
-        return true;
-      }
+      // InteractiveBoard already made the move, so we just sync our customGame
+      customGame.load(newFen);
+      setCurrentPosition(newFen);
+      setLastMove({ from: moveResult.from, to: moveResult.to });
+      console.log('✅ Custom move made:', moveResult.san);
+      return true;
     } catch (err) {
       console.error('❌ Invalid move:', err);
     }
