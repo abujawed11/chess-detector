@@ -1595,6 +1595,12 @@ def classify_basic_move(
 # 3) MISS DETECTION
 # ======================================================================
 
+
+
+# ======================================================================
+# 3) MISS DETECTION
+# ======================================================================
+
 @dataclass
 class MissParams:
     max_self_drop_cp: int = 500
@@ -1608,6 +1614,10 @@ class MissParams:
     min_save_gain_cp: int = 250
     min_conversion_gain_cp: int = 200
 
+    # NEW: threshold for "free material" missed
+    # e.g. 200–300cp = at least a clean pawn/piece win opportunity.
+    missed_material_min_gain_cp: int = 200
+
 
 def detect_miss(
     *,
@@ -1618,6 +1628,11 @@ def detect_miss(
     mover_color: str,
     best_mate_in_plies: Optional[int] = None,
     played_mate_in_plies: Optional[int] = None,
+
+    # NEW: how much immediate material best move / played move win (mover POV-ish cp)
+    best_material_gain_cp: Optional[float] = None,
+    played_material_gain_cp: Optional[float] = None,
+
     params: Optional[MissParams] = None,
 ) -> bool:
     if params is None:
@@ -1626,13 +1641,17 @@ def detect_miss(
     if eval_best_pre_white is None:
         return False
 
+    # Convert all evals to mover POV
     pre_pov     = cp_for_player(eval_pre_white,        mover_color)
     after_pov   = cp_for_player(eval_after_white,      mover_color)
     played_pov  = cp_for_player(eval_played_pre_white, mover_color)
     best_pov    = cp_for_player(eval_best_pre_white,   mover_color)
 
-    self_drop   = pre_pov - after_pov
-    opportunity = best_pov - played_pov
+    # PRE → POST drop for mover
+    self_drop   = pre_pov - after_pov          # >0 means we got worse
+    # "Opportunity" from PRE: best vs played
+    opportunity = best_pov - played_pov        # how much better best was than our move
+    # How much better best would be than final position
     miss_gap    = best_pov - after_pov
 
     situation_before = situation_from_cp(pre_pov)
@@ -1646,23 +1665,57 @@ def detect_miss(
         "opportunity": opportunity,
         "miss_gap": miss_gap,
         "situation_before": situation_before,
+        "best_material_gain_cp": best_material_gain_cp,
+        "played_material_gain_cp": played_material_gain_cp,
     })
 
+    # ------------------------------------------------------------------
+    # 0) Global gates: don't call huge self-harm or busted positions "Miss"
+    # ------------------------------------------------------------------
     if self_drop > params.max_self_drop_cp:
         return False
 
     if after_pov <= -params.still_ok_cp:
+        # We're clearly worse after the move: that's a real error, not just a Miss.
         return False
 
+    # ------------------------------------------------------------------
+    # 1) SPECIAL CASE: missed free material
+    # ------------------------------------------------------------------
+    # If engine says the best move immediately wins material (big enough),
+    # and our move does NOT take that material (or takes clearly less),
+    # and we didn't ruin our position -> count as Miss.
+    if best_material_gain_cp is not None and played_material_gain_cp is not None:
+        if (
+            best_material_gain_cp >= params.missed_material_min_gain_cp and
+            played_material_gain_cp < best_material_gain_cp and
+            self_drop <= params.max_self_drop_cp and
+            after_pov > -params.still_ok_cp
+        ):
+            print("MISS DEBUG: missed_free_material = True")
+            return True
+
+    # ------------------------------------------------------------------
+    # 2) If *no* clear tactical / eval chance, no Miss
+    # ------------------------------------------------------------------
     if opportunity < params.min_opportunity_cp and miss_gap < params.min_opportunity_cp:
         return False
 
     situation = situation_before
 
+    # ------------------------------------------------------------------
+    # 3) Missed short mate / kill shot while still winning
+    # ------------------------------------------------------------------
     if best_mate_in_plies is not None:
         if best_pov >= params.still_winning_cp and after_pov >= params.still_winning_cp:
+            # (Optionally you can restrict to small Mx window here, e.g. <= 3)
+            # if best_mate_in_plies <= 3 and (played_mate_in_plies is None or played_mate_in_plies > best_mate_in_plies + 1):
+            #     return True
             return True
 
+    # ------------------------------------------------------------------
+    # 4) Missed conversion while clearly winning
+    # ------------------------------------------------------------------
     if (
         situation in ("Winning", "Won") and
         pre_pov   >= params.still_winning_cp and
@@ -1671,6 +1724,9 @@ def detect_miss(
     ):
         return True
 
+    # ------------------------------------------------------------------
+    # 5) Missed defensive save (worse/lost -> drawable/OK)
+    # ------------------------------------------------------------------
     if situation in ("Worse", "Lost"):
         if (
             opportunity >= params.min_save_gain_cp and
@@ -1678,6 +1734,9 @@ def detect_miss(
         ):
             return True
 
+    # ------------------------------------------------------------------
+    # 6) Missed conversion (small edge / equal -> big edge)
+    # ------------------------------------------------------------------
     if situation in ("Winning", "Equalish"):
         if (
             opportunity >= params.min_conversion_gain_cp and
@@ -1685,6 +1744,9 @@ def detect_miss(
         ):
             return True
 
+    # ------------------------------------------------------------------
+    # 7) Generic tactical Miss: equalish position, big tactical jump
+    # ------------------------------------------------------------------
     is_equalish = abs(pre_pov) <= params.equal_band_cp
     is_big_tactical = (
         best_pov >= pre_pov + params.tactical_min_gain_cp and
@@ -1693,11 +1755,121 @@ def detect_miss(
 
     if is_equalish and is_big_tactical:
         return True
-    
+
+    # ------------------------------------------------------------------
+    # 8) Fallback: generic "big opportunity missed"
+    # ------------------------------------------------------------------
     if opportunity >= params.min_opportunity_cp:
         return True
 
     return False
+
+
+
+
+# @dataclass
+# class MissParams:
+#     max_self_drop_cp: int = 500
+#     min_opportunity_cp: int = 200
+#     tactical_min_gain_cp: int = 300
+
+#     still_winning_cp: int = 300
+#     equal_band_cp: int = 150
+#     still_ok_cp: int = 120
+
+#     min_save_gain_cp: int = 250
+#     min_conversion_gain_cp: int = 200
+
+
+# def detect_miss(
+#     *,
+#     eval_pre_white: float,
+#     eval_after_white: float,
+#     eval_played_pre_white: float,
+#     eval_best_pre_white: Optional[float],
+#     mover_color: str,
+#     best_mate_in_plies: Optional[int] = None,
+#     played_mate_in_plies: Optional[int] = None,
+#     params: Optional[MissParams] = None,
+# ) -> bool:
+#     if params is None:
+#         params = MissParams()
+
+#     if eval_best_pre_white is None:
+#         return False
+
+#     pre_pov     = cp_for_player(eval_pre_white,        mover_color)
+#     after_pov   = cp_for_player(eval_after_white,      mover_color)
+#     played_pov  = cp_for_player(eval_played_pre_white, mover_color)
+#     best_pov    = cp_for_player(eval_best_pre_white,   mover_color)
+
+#     self_drop   = pre_pov - after_pov
+#     opportunity = best_pov - played_pov
+#     miss_gap    = best_pov - after_pov
+
+#     situation_before = situation_from_cp(pre_pov)
+
+#     print("MISS DEBUG:", {
+#         "pre_pov": pre_pov,
+#         "after_pov": after_pov,
+#         "played_pov": played_pov,
+#         "best_pov": best_pov,
+#         "self_drop": self_drop,
+#         "opportunity": opportunity,
+#         "miss_gap": miss_gap,
+#         "situation_before": situation_before,
+#     })
+
+#     if self_drop > params.max_self_drop_cp:
+#         return False
+
+#     if after_pov <= -params.still_ok_cp:
+#         return False
+
+#     if opportunity < params.min_opportunity_cp and miss_gap < params.min_opportunity_cp:
+#         return False
+
+#     situation = situation_before
+
+#     if best_mate_in_plies is not None:
+#         if best_pov >= params.still_winning_cp and after_pov >= params.still_winning_cp:
+#             return True
+
+#     if (
+#         situation in ("Winning", "Won") and
+#         pre_pov   >= params.still_winning_cp and
+#         best_pov  >= pre_pov + params.tactical_min_gain_cp and
+#         after_pov >= params.still_winning_cp
+#     ):
+#         return True
+
+#     if situation in ("Worse", "Lost"):
+#         if (
+#             opportunity >= params.min_save_gain_cp and
+#             best_pov   >= -params.still_ok_cp
+#         ):
+#             return True
+
+#     if situation in ("Winning", "Equalish"):
+#         if (
+#             opportunity >= params.min_conversion_gain_cp and
+#             best_pov   >= pre_pov + params.min_conversion_gain_cp
+#         ):
+#             return True
+
+#     is_equalish = abs(pre_pov) <= params.equal_band_cp
+#     is_big_tactical = (
+#         best_pov >= pre_pov + params.tactical_min_gain_cp and
+#         best_pov >= params.tactical_min_gain_cp
+#     )
+
+#     if is_equalish and is_big_tactical:
+#         return True
+    
+#     if opportunity >= params.min_opportunity_cp:
+#         return True
+
+#     return False
 
 
 # ======================================================================
