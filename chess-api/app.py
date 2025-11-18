@@ -33,9 +33,8 @@ from utils.chess_helpers import (
 # Import move classification logic
 from basic_move_labels import (
     classify_basic_move,
+    detect_great_move,
     detect_miss,
-    detect_book_move,
-    classify_exclam_move,
     detect_sacrifice,
     detect_sac_brilliancy,
 )
@@ -690,19 +689,19 @@ async def evaluate_move(
         print("is_book: ", book_for_move)
 
         # --- OLD general exclam logic (defensive brilliancy, mate-flip, etc.) ---
-        exclam_label, brill_info = classify_exclam_move(
-            eval_before_white=eval_before_cp,
-            eval_after_white=eval_after_cp,
-            eval_best_white=best_eval_from_pre,
-            mover_color=side_before,
-            is_sacrifice=is_sacrifice,
-            is_book=book_for_move,
-            multipv_rank=multipv_rank,
-            played_eval_from_pre_white=played_eval_from_pre,
-            best_mate_in_plies_pre=best_mate_in,
-            played_mate_in_plies_post=played_mate_in,
-            mate_flip=mate_flip,
-        )
+        # exclam_label, brill_info = classify_exclam_move(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     is_sacrifice=is_sacrifice,
+        #     is_book=book_for_move,
+        #     multipv_rank=multipv_rank,
+        #     played_eval_from_pre_white=played_eval_from_pre,
+        #     best_mate_in_plies_pre=best_mate_in,
+        #     played_mate_in_plies_post=played_mate_in,
+        #     mate_flip=mate_flip,
+        # )
 
         # --- NEW sacrifice-based brilliancy (your custom logic) ---
         # Here:
@@ -719,17 +718,52 @@ async def evaluate_move(
             sac_result=sac_result,
         )
 
+        # --- NEW Great move detection (non-sacrifice, big delta_eval, no CP loss) ---
+        # great_info = detect_great_move(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_pre_white=best_eval_from_pre,
+        #     eval_played_pre_white=played_eval_from_pre,
+        #     mover_color=side_before,
+        # )
+
+        great_info = detect_great_move(
+            eval_before_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            eval_best_pre_white=best_eval_from_pre,
+            eval_played_pre_white=played_eval_from_pre,
+            mover_color=side_before,
+        )
+
+
+        print("GREAT DEBUG:", {
+            "is_great": great_info.is_great,
+            "reason": great_info.reason,
+            "mover_improvement_cp": great_info.mover_improvement_cp,
+            "cp_loss_for_mover_cp": great_info.cp_loss_for_mover_cp,
+            "delta_eval_white_cp": great_info.delta_eval_white_cp,
+        })
+
+        # --- Mate-flip catastrophe detection (Blunder) ---
+        # Use mover POV swing; threshold ~800cp like old ExclamParams
+        eval_before_mover = cp_for_player(eval_before_cp, side_before)
+        eval_after_mover  = cp_for_player(eval_after_cp,  side_before)
+        eval_swing_mover  = eval_after_mover - eval_before_mover
+
+        mate_flip_blunder = bool(
+            mate_flip and eval_swing_mover <= -800
+        )
 
         # --- Final label priority:
         # Book > mate-flip Blunder > sac-based Brilliant > general exclam (Brilliant/Great) > Miss > basic
         if book_for_move:
             label = "Book"
-        elif exclam_label == "Blunder":
+        elif mate_flip_blunder == "Blunder":
             label = "Blunder"   # mate-flip catastrophe
         elif sac_brill.is_brilliant:
             # ONLY this path is allowed to use 'Brilliant'
             label = "Brilliant"
-        elif exclam_label in ("Brilliant", "Great"):
+        elif great_info.is_great:
             # Any non-sac brilliancy from the old logic becomes 'Great'
             label = "Great"
 
@@ -768,8 +802,8 @@ async def evaluate_move(
             "miss_detected": is_miss,
             "is_book": book_for_move,
             "in_opening_db": book_for_move,  # Raw book detection flag
-            "exclam_label": exclam_label,
-            "brilliancy_info": brill_info.__dict__ if brill_info else None,
+            "exclam_label": mate_flip_blunder,
+            # "brilliancy_info": brill_info.__dict__ if brill_info else None,
             "sac_brilliancy": sac_brill.__dict__,         # NEW: reason + adv values
             "label": label,
         })
