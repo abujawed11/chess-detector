@@ -82,8 +82,37 @@ function sanitizeOrInferCastling(legal, chosen){
 }
 
 function validateFen(fen){
-  try { new Chess(fen); return {valid:true}; }
-  catch(e){ return {valid:false, reason:e?.message || "Invalid FEN"}; }
+  try {
+    const chess = new Chess(fen);
+
+    // Check if the opponent's king (side that just moved) is in check
+    // If it's White's turn, check if Black's king is in check (illegal!)
+    // If it's Black's turn, check if White's king is in check (illegal!)
+
+    const currentTurn = chess.turn(); // 'w' or 'b'
+    const opponentColor = currentTurn === 'w' ? 'b' : 'w';
+
+    // Temporarily switch turns to check if opponent king is in check
+    const fenParts = fen.split(' ');
+    fenParts[1] = opponentColor;
+    const testFen = fenParts.join(' ');
+
+    try {
+      const testChess = new Chess(testFen);
+      if (testChess.inCheck()) {
+        return {
+          valid: false,
+          reason: `Position is illegal: ${opponentColor === 'w' ? 'White' : 'Black'}'s king is in check, but it's ${currentTurn === 'w' ? 'White' : 'Black'}'s turn to move. This means ${opponentColor === 'w' ? 'White' : 'Black'} would have moved and left their king in check, which is not allowed.`
+        };
+      }
+    } catch (e) {
+      // If we can't create test position, just continue with basic validation
+    }
+
+    return {valid:true};
+  } catch(e) {
+    return {valid:false, reason:e?.message || "Invalid FEN"};
+  }
 }
 
 // Smart validation: try both sides to find a legal position

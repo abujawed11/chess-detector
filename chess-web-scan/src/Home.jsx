@@ -24,6 +24,14 @@ export default function Home({ onNavigate }) {
       color: 'from-blue-500 to-blue-700',
       action: () => onNavigate('pgn-analysis')
     },
+        {
+      id: 'fen-upload',
+      title: 'Load FEN Position',
+      description: 'Paste or upload a FEN string to load any chess position instantly',
+      icon: '📝',
+      color: 'from-indigo-500 to-indigo-700',
+      action: () => onNavigate('fen-upload')
+    },
     {
       id: 'play-computer',
       title: 'Play vs Computer',
@@ -48,6 +56,7 @@ export default function Home({ onNavigate }) {
       color: 'from-teal-500 to-teal-700',
       action: () => onNavigate('analysis')
     },
+
     {
       id: 'test-suite',
       title: 'Test Classification',

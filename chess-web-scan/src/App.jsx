@@ -9,6 +9,7 @@ import StockfishAnalysis from './StockfishAnalysis'
 import EngineTest from './EngineTest'
 import Home from './Home'
 import PGNAnalysis from './PGNAnalysis'
+import FENUpload from './FENUpload'
 import { API_BASE_URL } from './config/api'
 
 export default function App(){
@@ -131,6 +132,13 @@ export default function App(){
 
   function handleOpenEditor(fenToEdit){
     setFEN(fenToEdit || analysisFen)
+    setShowEditor(true)
+    setCurrentPage('scanner')
+  }
+
+  function handleLoadFenPosition(fenString){
+    setFEN(fenString)
+    setOverlayURL('') // No overlay for manually loaded FEN
     setShowEditor(true)
     setCurrentPage('scanner')
   }
@@ -305,6 +313,16 @@ export default function App(){
         </nav>
         <PGNAnalysis />
       </>
+    );
+  }
+
+  // Show FEN Upload page
+  if (currentPage === 'fen-upload') {
+    return (
+      <FENUpload
+        onBack={() => setCurrentPage('home')}
+        onLoadPosition={handleLoadFenPosition}
+      />
     );
   }
 
