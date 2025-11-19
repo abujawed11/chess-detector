@@ -6,8 +6,8 @@
 .fenbox { width: 100%; max-width: 640px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding:8px; }
 button { padding: 8px 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: #fff; cursor: pointer; }
 button:disabled { opacity: .6; cursor:not-allowed; }
-label.file { display:inline-block; padding:8px 12px; border:1px dashed #555; border-radius:8px; cursor:pointer; transition: all 0.2s; }
-label.file:hover { border-color: #888; background: #1a1a1a; }
+label.file { display:inline-block; padding:8px 12px; border:1px dashed #555; border-radius:8px; cursor:pointer; transition: all 0.2s; background: #111; color: #fff; }
+label.file:hover { border-color: #888; background: #1a1a1a; color: #fff; }
 small.muted { color:#666; }
 
 .spinner {
