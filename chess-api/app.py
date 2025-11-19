@@ -2,6 +2,7 @@ import base64
 import os
 import sys
 import time
+from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,8 +36,10 @@ from basic_move_labels import (
     classify_basic_move,
     detect_great_move,
     detect_miss,
+    detect_missed_accept_sacrifice,
     detect_sacrifice,
     detect_sac_brilliancy,
+    material_gain_for_move,
 )
 
 from opening_book import is_book_move
@@ -499,6 +502,60 @@ def analyze_or_fail(fen: str, depth: int, multipv: int, engine):
     raise RuntimeError(f"No PVs returned for fen='{fen[:60]}...'. Last error: {last_err}")
 
 
+
+# def eval_best_accept_line_white(
+#     board_before: chess.Board,
+#     sac_target_square: int,
+#     mover_color: str,
+#     depth: int,
+#     engine,
+# ) -> Optional[float]:
+#     """
+#     Compute eval_from_white POV after the *best* accepting capture
+#     on sac_target_square, from board_before.
+
+#     Returns:
+#         eval_accept_white (centipawns from White POV) or None
+#         if no accepting capture exists.
+#     """
+#     # Find all legal accepting captures
+#     accepting_moves = [
+#         mv for mv in board_before.legal_moves
+#         if board_before.is_capture(mv) and mv.to_square == sac_target_square
+#     ]
+
+#     if not accepting_moves:
+#         return None
+
+#     best_eval_white = None
+#     best_eval_mover = None
+
+#     for mv in accepting_moves:
+#         b_accept = board_before.copy(stack=False)
+#         b_accept.push(mv)
+#         accept_fen = b_accept.fen()
+
+#         # Analyze accept position
+#         post = analyze_or_fail(accept_fen, depth, 1, engine)
+#         score_accept = post[0]["score"]
+
+#         side_after_accept = "w" if b_accept.turn == chess.WHITE else "b"
+#         eval_accept_white = eval_for_white(score_accept, side_after_accept)
+
+#         # Choose the accept line that is best for the *mover*
+#         mover_eval = cp_for_player(eval_accept_white, mover_color)
+#         if best_eval_white is None:
+#             best_eval_white = eval_accept_white
+#             best_eval_mover = mover_eval
+#         else:
+#             if mover_eval > best_eval_mover:
+#                 best_eval_white = eval_accept_white
+#                 best_eval_mover = mover_eval
+
+#     return best_eval_white
+
+
+
 @app.post("/evaluate")
 async def evaluate_move(
     fen: str = Form(...),
@@ -546,6 +603,30 @@ async def evaluate_move(
         multipv_rank, top_gap, played_eval_from_pre, best_eval_from_pre = played_rank_and_gap(
             move, pre, side_before
         )
+
+
+
+        # --- NEW: material gain for best move vs played move (from PRE position) ---
+        best_material_gain_cp = None
+        played_material_gain_cp = None
+
+        # Best move from PRE (engine)
+        try:
+            # Assuming your engine output has "pv": ["e2e4", "d2d4", ...]
+            if pre and "pv" in pre[0] and pre[0]["pv"]:
+                best_move_uci = pre[0]["pv"][0]
+                best_move_obj = chess.Move.from_uci(best_move_uci)
+                best_material_gain_cp = material_gain_for_move(board_before, best_move_obj)
+        except Exception as e:
+            print("ERROR computing best_material_gain_cp:", e)
+
+        # Played move from PRE
+        try:
+            played_move_obj = chess.Move.from_uci(move)
+            played_material_gain_cp = material_gain_for_move(board_before, played_move_obj)
+        except Exception as e:
+            print("ERROR computing played_material_gain_cp:", e)
+
 
         # POST analysis (single PV)
         board_after = board_before.copy()
@@ -635,29 +716,7 @@ async def evaluate_move(
         if mate_flip:
             mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
 
-        # --- General Miss detection ---
-        # is_miss = detect_miss(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     best_mate_in_plies=best_mate_in,
-        #     played_mate_in_plies=played_mate_in,
-        # )
 
-        # --- Miss detection (FIXED CALL) ---
-        # is_miss = detect_miss(
-        #     # IMPORTANT: use played-from-PRE eval here, not eval_before_cp
-        #     eval_before_white=played_eval_from_pre,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     best_mate_in_plies=best_mate_in,
-        #     played_mate_in_plies=played_mate_in,
-        # )
-
-
-        # --- Miss detection ---
         is_miss = detect_miss(
             eval_pre_white=eval_before_cp,              # best-line eval from PRE
             eval_after_white=eval_after_cp,            # eval after move
@@ -666,42 +725,65 @@ async def evaluate_move(
             mover_color=side_before,
             best_mate_in_plies=best_mate_in,
             played_mate_in_plies=played_mate_in,
+            best_material_gain_cp=best_material_gain_cp,
+            played_material_gain_cp=played_material_gain_cp,
         )
 
 
+
         print("Miss detected:", is_miss)
+
+
+        # opp_sac_result = detect_sacrifice(board_before, uci_move_obj)
+        sac_target_square = uci_move_obj.to_square
+        # is_sacrifice = sac_result.is_real_sacrifice
+
+        played_move_obj = chess.Move.from_uci(move)
+
+
+        # --- Eval if we had accepted the sacrifice (for MissedAcceptSac) ---
+        # eval_accept_white = None
+
+        # # Here we are *assuming* this move is the side responding to a sac.
+        # # In a full game pipeline, you'd instead pass the opponent's sac_result/target.
+        # if sac_result.is_real_sacrifice:
+        #     # For "missed accept", we actually want: position AFTER opponent's sac,
+        #     # BEFORE our move. In this API we only have one move at a time, so
+        #     # this is just a template for your full game analyzer.
+        #     eval_accept_white = eval_best_accept_line_white(
+        #         board_before=board_before,
+        #         sac_target_square=sac_target_square,
+        #         mover_color=side_before,
+        #         depth=depth,
+        #         engine=persistent_engine,
+        #     )
+
+
+
+
+        # miss_accept_result = detect_missed_accept_sacrifice(
+        #     last_sac_result=is_sacrifice,
+        #     sac_target_square=sac_target_square,
+        #     board_before=board_before,
+        #     played_move=played_move_obj,
+        #     eval_pre_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_accept_white=eval_accept_white,  # eval if we had captured
+        #     mover_color=side_before,
+        # )
+
+        # is_miss_accept_sac = miss_accept_result.is_miss
+
+
 
         # --- Book detection (custom opening DB) ---
 
         book_for_move = is_book_move(fen_before, move)  # move is UCI string
 
 
-        # in_opening_db = is_book_move(fen_before, move)  # move is UCI string
-        # is_book = detect_book_move(
-        #     fullmove_number=fullmove_number,
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     cpl=cpl,
-        #     multipv_rank=multipv_rank,
-        #     in_opening_db=in_opening_db,
-        # )
+
 
         print("is_book: ", book_for_move)
-
-        # --- OLD general exclam logic (defensive brilliancy, mate-flip, etc.) ---
-        # exclam_label, brill_info = classify_exclam_move(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     is_sacrifice=is_sacrifice,
-        #     is_book=book_for_move,
-        #     multipv_rank=multipv_rank,
-        #     played_eval_from_pre_white=played_eval_from_pre,
-        #     best_mate_in_plies_pre=best_mate_in,
-        #     played_mate_in_plies_post=played_mate_in,
-        #     mate_flip=mate_flip,
-        # )
 
         # --- NEW sacrifice-based brilliancy (your custom logic) ---
         # Here:
@@ -719,13 +801,6 @@ async def evaluate_move(
         )
 
         # --- NEW Great move detection (non-sacrifice, big delta_eval, no CP loss) ---
-        # great_info = detect_great_move(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_pre_white=best_eval_from_pre,
-        #     eval_played_pre_white=played_eval_from_pre,
-        #     mover_color=side_before,
-        # )
 
         great_info = detect_great_move(
             eval_before_white=eval_before_cp,
@@ -758,27 +833,19 @@ async def evaluate_move(
         # Book > mate-flip Blunder > sac-based Brilliant > general exclam (Brilliant/Great) > Miss > basic
         if book_for_move:
             label = "Book"
-        elif mate_flip_blunder == "Blunder":
-            label = "Blunder"   # mate-flip catastrophe
+        elif mate_flip_blunder:
+            label = "Blunder"
         elif sac_brill.is_brilliant:
-            # ONLY this path is allowed to use 'Brilliant'
             label = "Brilliant"
         elif great_info.is_great:
-            # Any non-sac brilliancy from the old logic becomes 'Great'
             label = "Great"
-
         elif stalemate_from_win_miss:
-    # Special case: you were winning and stalemated into a draw
             label = "Miss"
         elif is_miss:
             label = "Miss"
         else:
             label = basic_label
 
-        # elif is_miss:
-        #     label = "Miss"
-        # else:
-        #     label = basic_label
 
 
         print("Label: ", label)
@@ -808,122 +875,6 @@ async def evaluate_move(
             "label": label,
         })
 
-
-
-
-        # # Sacrifice detection
-        # uci_move_obj = chess.Move.from_uci(move)
-        # eval_types_dict = {
-        #     "before": pre_score.get("type") if pre_score else None,
-        #     "after": post_score.get("type") if post_score else None,
-        # }
-
-        # is_sacrifice = is_real_sacrifice(
-        #     board_before=board_before,
-        #     move=uci_move_obj,
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     mover_color=side_before,
-        #     eval_types=eval_types_dict,
-        # )
-
-        # print("SAC DEBUG:", {
-        #     "is_sacrifice": is_sacrifice,
-        #     "eval_before": eval_before_cp,
-        #     "eval_after": eval_after_cp,
-        # })
-
-        # # Mate metadata
-        # best_mate_in = mate_ply(pre_score)
-        # played_mate_in = mate_ply(post_score)
-
-        # pre_is_mate = pre_score.get("type") == "mate"
-        # post_is_mate = post_score.get("type") == "mate"
-
-        # mate_flip = bool(pre_is_mate and post_is_mate and (eval_before_cp * eval_after_cp < 0))
-        # mate_flip_severity = 0
-        # if mate_flip:
-        #     mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
-
-        # # Miss detection
-        # is_miss = detect_miss(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     best_mate_in_plies=best_mate_in,
-        #     played_mate_in_plies=played_mate_in,
-        # )
-
-        # print("Miss detected:", is_miss)
-
-        # # Book detection
-        # in_opening_db = is_book_move(fen_before, move)
-        # is_book = detect_book_move(
-        #     fullmove_number=fullmove_number,
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     cpl=cpl,
-        #     multipv_rank=multipv_rank,
-        #     in_opening_db=in_opening_db,
-        # )
-
-        # print("is_book:", is_book)
-        # print("in_opening_db:", in_opening_db)
-
-        # # Brilliant/Great detection
-        # exclam_label, brill_info = classify_exclam_move(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     is_sacrifice=is_sacrifice,
-        #     is_book=is_book,
-        #     multipv_rank=multipv_rank,
-        #     played_eval_from_pre_white=played_eval_from_pre,
-        #     best_mate_in_plies_pre=best_mate_in,
-        #     played_mate_in_plies_post=played_mate_in,
-        #     mate_flip=mate_flip,
-        # )
-
-        # # Final label priority
-        # if in_opening_db:
-        #     label = "Book"
-        # elif exclam_label == "Blunder":
-        #     label = "Blunder"
-        # elif exclam_label in ("Brilliant", "Great"):
-        #     label = exclam_label
-        # elif is_miss:
-        #     label = "Miss"
-        # else:
-        #     label = basic_label
-
-        # print("Final Label:", label)
-
-        # return JSONResponse({
-        #     "fen_before": fen_before,
-        #     "move": move,
-        #     "eval_before": eval_before_cp,
-        #     "eval_after": eval_after_cp,
-        #     "eval_change": eval_change,
-        #     "multipv_rank": multipv_rank,
-        #     "top_gap": top_gap,
-        #     "cpl": cpl,
-        #     "eval_before_struct": pre_score,
-        #     "eval_after_struct": post_score,
-        #     "is_sacrifice": is_sacrifice,
-        #     "best_mate_in": best_mate_in,
-        #     "played_mate_in": played_mate_in,
-        #     "mate_flip": mate_flip,
-        #     "mate_flip_severity": mate_flip_severity,
-        #     "basic_label": basic_label,
-        #     "miss_detected": is_miss,
-        #     "is_book": is_book,
-        #     "in_opening_db": in_opening_db,
-        #     "exclam_label": exclam_label,
-        #     "brilliancy_info": brill_info.__dict__ if brill_info else None,
-        #     "label": label,
-        # })
 
     except Exception as e:
         logger.error(f"Error in /evaluate: {str(e)}", exc_info=True)

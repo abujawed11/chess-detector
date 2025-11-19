@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 import ChessBoard from './ChessBoard'
 import CornerAdjuster from './CornerAdjuster'
@@ -12,8 +12,15 @@ import PGNAnalysis from './PGNAnalysis'
 import FENUpload from './FENUpload'
 import { API_BASE_URL } from './config/api'
 
+// Helper to get page from URL hash
+function getPageFromHash() {
+  const hash = window.location.hash.slice(1); // Remove '#'
+  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload'];
+  return validPages.includes(hash) ? hash : 'home';
+}
+
 export default function App(){
-  const [currentPage, setCurrentPage] = useState('home') // 'home', 'scanner', 'analysis', or 'test'
+  const [currentPage, setCurrentPageState] = useState(getPageFromHash()) // Read from URL hash
   const [analysisFen, setAnalysisFen] = useState('') // FEN to analyze
   const [file, setFile] = useState(null)
   const [imgURL, setImgURL] = useState('')
@@ -26,6 +33,21 @@ export default function App(){
   const [stage, setStage] = useState('upload') // 'upload', 'adjust', 'result'
   const [showEditor, setShowEditor] = useState(false)
   const inputRef = useRef(null)
+
+  // Custom setCurrentPage that also updates URL hash
+  const setCurrentPage = useCallback((page) => {
+    setCurrentPageState(page);
+    window.location.hash = page;
+  }, []);
+
+  // Listen for browser back/forward buttons
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentPageState(getPageFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   async function onPick(e){
     const f = e.target.files?.[0]

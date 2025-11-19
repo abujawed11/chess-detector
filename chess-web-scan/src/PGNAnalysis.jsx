@@ -289,9 +289,9 @@ export default function PGNAnalysis() {
           symbol
         });
 
-        badgeTimeoutRef.current = setTimeout(() => {
-          setMoveBadge(null);
-        }, 5000);
+        // badgeTimeoutRef.current = setTimeout(() => {
+        //   setMoveBadge(null);
+        // }, 5000);
       } else {
         setMoveBadge(null);
       }
@@ -935,17 +935,46 @@ export default function PGNAnalysis() {
       <div className="mb-6 grid gap-5 lg:grid-cols-2">
         {/* Column 1: Board + controls */}
         <div className="w-full rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 to-white p-4 shadow-sm flex flex-col items-center">
-          {/* <div className="w-full max-w-[520px]"> */}
-          <InteractiveBoard
-            fen={currentPosition}
-            onMove={enableCustomMoves ? handleCustomMove : () => { }}
-            bestMove={bestMove}
-            flipped={flipped}
-            moveBadge={moveBadge}
-            lastMove={lastMove}
-            interactive={enableCustomMoves}
-          />
-          {/* </div> */}
+          {/* Board with Evaluation Bar */}
+          <div className="flex items-center gap-4">
+            {/* Evaluation Bar */}
+            <EvaluationBar
+              score={(() => {
+                // In custom mode, show evaluation from custom move evaluations
+                if (enableCustomMoves && customMoveIndex > 0 && customMoveEvaluations[customMoveIndex]) {
+                  // Use evalAfter from the custom move evaluation
+                  return customMoveEvaluations[customMoveIndex].evalAfter || { type: 'cp', value: 0 };
+                }
+                // In custom mode at starting position with engine hints
+                if (enableCustomMoves && customMoveIndex === 0 && showEngineHint && currentEval) {
+                  return currentEval;
+                }
+                // In PGN analysis mode, show evaluation from analyzed moves
+                if (!enableCustomMoves && currentMoveIndex >= 0 && analyzedMoves[currentMoveIndex]?.evaluation) {
+                  return analyzedMoves[currentMoveIndex].evaluation;
+                }
+                // With engine hints enabled, show current eval
+                if (showEngineHint && currentEval) {
+                  return currentEval;
+                }
+                // Default to equal position
+                return { type: 'cp', value: 0 };
+              })()}
+              fen={currentPosition}
+              height={520}
+            />
+
+            {/* Chess Board */}
+            <InteractiveBoard
+              fen={currentPosition}
+              onMove={enableCustomMoves ? handleCustomMove : () => { }}
+              bestMove={bestMove}
+              flipped={flipped}
+              moveBadge={moveBadge}
+              lastMove={lastMove}
+              interactive={enableCustomMoves}
+            />
+          </div>
 
           {/* Custom moves mode indicator */}
           {enableCustomMoves && (
