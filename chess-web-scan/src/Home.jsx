@@ -35,10 +35,10 @@ export default function Home({ onNavigate }) {
     {
       id: 'play-computer',
       title: 'Play vs Computer',
-      description: 'Challenge Stockfish 17.1 - one of the strongest chess engines in the world',
+      description: 'Challenge Stockfish 17.1 at different ELO levels - from beginner to grandmaster',
       icon: '🤖',
       color: 'from-green-500 to-green-700',
-      action: () => onNavigate('analysis')
+      action: () => onNavigate('play-computer')
     },
     {
       id: 'play-human',

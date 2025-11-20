@@ -10,12 +10,13 @@ import EngineTest from './EngineTest'
 import Home from './Home'
 import PGNAnalysis from './PGNAnalysis'
 import FENUpload from './FENUpload'
+import PlayComputer from './PlayComputer'
 import { API_BASE_URL } from './config/api'
 
 // Helper to get page from URL hash
 function getPageFromHash() {
   const hash = window.location.hash.slice(1); // Remove '#'
-  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload'];
+  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload', 'play-computer'];
   return validPages.includes(hash) ? hash : 'home';
 }
 
@@ -345,6 +346,37 @@ export default function App(){
         onBack={() => setCurrentPage('home')}
         onLoadPosition={handleLoadFenPosition}
       />
+    );
+  }
+
+  // Show Play Computer page
+  if (currentPage === 'play-computer') {
+    return (
+      <>
+        <nav style={{
+          padding: '12px 20px',
+          background: '#1f2937',
+          display: 'flex',
+          gap: 16,
+          marginBottom: 0
+        }}>
+          <button
+            onClick={() => setCurrentPage('home')}
+            style={{
+              padding: '8px 16px',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Home
+          </button>
+          <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Play vs Computer</span>
+        </nav>
+        <PlayComputer />
+      </>
     );
   }
 
