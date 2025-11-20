@@ -8,6 +8,7 @@ import chess
 # Piece values + simple material helper
 # ------------------------------------------------------------
 
+
 PIECE_VALUES = {
     chess.PAWN:   100,
     chess.KNIGHT: 300,
@@ -15,7 +16,6 @@ PIECE_VALUES = {
     chess.ROOK:   500,
     chess.QUEEN:  900,
 }
-
 
 def material_gain_for_move(board: chess.Board, move: chess.Move) -> int:
     """
@@ -36,8 +36,6 @@ def material_gain_for_move(board: chess.Board, move: chess.Move) -> int:
     return PIECE_VALUES.get(captured_type, 0)
 
 
-
-
 def material_for_color(board: chess.Board, color: chess.Color) -> int:
     total = 0
     for ptype, val in PIECE_VALUES.items():
@@ -52,15 +50,16 @@ def material_for_color(board: chess.Board, color: chess.Color) -> int:
 @dataclass
 class SacrificeParams:
     """
-    Thresholds for sacrifice detection.
-    All values are in centipawns.
+    Thresholds for sacrifice detection (all in centipawns).
+    - small_sac_threshold_cp: minimum net loss to call it *any* sacrifice
+    - big_sac_threshold_cp:   minimum net loss to call it a *big* sac
+      (for brilliancies, etc.)
+    - min_offered_piece_cp:   ignore cases where the offered piece face
+      value (minus captured piece) is too small (e.g. pawn nudges)
     """
-    # Min *net* loss (after capture + ideal recapture) to treat as real sac
-    net_loss_threshold_cp: int = 80   # ~ minor piece or better
-
-
-    # Min face value of the offered piece (don’t call pawn nudges “sacs”)
-    min_offered_piece_cp: int = 200    # tune if you want pawn sacs
+    small_sac_threshold_cp: int = 80    # ~1 pawn
+    big_sac_threshold_cp:   int = 250   # ~minor piece / exchange
+    min_offered_piece_cp:   int = 200   # require at least piece-sized risk
 
 
 @dataclass
@@ -68,11 +67,9 @@ class SacrificeResult:
     """
     Output of detect_sacrifice().
     """
-    is_real_sacrifice: bool
-
-    is_big_sacrifice: bool   # new
-    # Logging info:
-    worst_net_loss_cp: int          # max net (offered - taker) over accepting lines
+    is_real_sacrifice: bool       # >= small_sac_threshold_cp
+    is_big_sacrifice: bool        # >= big_sac_threshold_cp (for brilliancy)
+    worst_net_loss_cp: int        # max net (offered - taker) over accepting lines
     had_accepting_capture: bool
     offered_piece_cp: int
     num_attackers_opponent: int
@@ -85,7 +82,9 @@ def detect_sacrifice(
     params: Optional[SacrificeParams] = None,
 ) -> SacrificeResult:
     """
-    Detect whether `move` is a *real* material sacrifice, using local exchange logic.
+    Detect whether `move` is a material sacrifice using local exchange logic.
+    - is_real_sacrifice: net loss >= small_sac_threshold_cp
+    - is_big_sacrifice:  net loss >= big_sac_threshold_cp
     """
     if params is None:
         params = SacrificeParams()
@@ -99,6 +98,7 @@ def detect_sacrifice(
     if moving_piece is None:
         return SacrificeResult(
             is_real_sacrifice=False,
+            is_big_sacrifice=False,
             worst_net_loss_cp=0,
             had_accepting_capture=False,
             offered_piece_cp=0,
@@ -106,6 +106,7 @@ def detect_sacrifice(
             num_attackers_mover=0,
         )
 
+    # Immediate capture value (what we take now)
     if board.is_capture(move):
         if board.is_en_passant(move):
             captured_cp = PIECE_VALUES[chess.PAWN]
@@ -126,11 +127,12 @@ def detect_sacrifice(
     num_attackers_mover = 0
     worst_net_loss = 0
     had_accepting_capture = False
-    is_real_sac = False
 
+    # If our moved piece is no longer there (e.g. promotion weirdness), bail
     if piece is None or piece.color != mover_color:
         return SacrificeResult(
             is_real_sacrifice=False,
+            is_big_sacrifice=False,
             worst_net_loss_cp=0,
             had_accepting_capture=False,
             offered_piece_cp=0,
@@ -140,14 +142,15 @@ def detect_sacrifice(
 
     offered_piece_cp = PIECE_VALUES.get(piece.piece_type, 0)
 
-    # How much net material are we really putting at risk,
+    # How much face-value material are we putting at risk,
     # after accounting for the piece we just captured?
     risk_face_cp = max(0, offered_piece_cp - captured_cp)
 
-    # If risk_face_cp is small, don’t treat this as a sacrifice.
+    # If risk is too small, don't treat this as a sacrifice at all.
     if risk_face_cp < params.min_offered_piece_cp:
         return SacrificeResult(
             is_real_sacrifice=False,
+            is_big_sacrifice=False,
             worst_net_loss_cp=0,
             had_accepting_capture=False,
             offered_piece_cp=offered_piece_cp,
@@ -161,9 +164,11 @@ def detect_sacrifice(
     num_attackers_opponent = len(attackers_opponent)
     num_attackers_mover    = len(attackers_mover)
 
+    # No way to "accept" the sac if they can't capture the piece.
     if num_attackers_opponent == 0:
         return SacrificeResult(
             is_real_sacrifice=False,
+            is_big_sacrifice=False,
             worst_net_loss_cp=0,
             had_accepting_capture=False,
             offered_piece_cp=offered_piece_cp,
@@ -171,6 +176,7 @@ def detect_sacrifice(
             num_attackers_mover=num_attackers_mover,
         )
 
+    # All legal captures that take our just-moved piece on target_sq.
     accepting_moves = [
         mv for mv in b1.legal_moves
         if b1.is_capture(mv) and mv.to_square == target_sq
@@ -182,25 +188,28 @@ def detect_sacrifice(
         if attacker_piece is None:
             continue
 
+        # Optional: don't count suicidal king captures if square is defended
         if attacker_piece.piece_type == chess.KING and num_attackers_mover > 0:
-            # Ignore defended-king captures as "accepting the sac"
             continue
 
         attacker_val = PIECE_VALUES.get(attacker_piece.piece_type, 0)
         has_defender = num_attackers_mover > 0
 
         if not has_defender:
+            # If we can't recapture at all, we just lose the face-value risk.
             net_loss = risk_face_cp
         else:
+            # They take our piece (risk_face_cp), then we recapture their attacker.
             net_loss = risk_face_cp - attacker_val
 
         if net_loss > worst_net_loss:
             worst_net_loss = net_loss
 
-    
-
-    if had_accepting_capture and worst_net_loss >= params.net_loss_threshold_cp:
-        is_real_sac = True
+    # Use the two thresholds you specified
+    is_real_sacrifice = had_accepting_capture and \
+        worst_net_loss >= params.small_sac_threshold_cp
+    is_big_sacrifice  = had_accepting_capture and \
+        worst_net_loss >= params.big_sac_threshold_cp
 
     print("SAC DEBUG:", {
         "move": move.uci(),
@@ -211,11 +220,13 @@ def detect_sacrifice(
         "num_attackers_mover": num_attackers_mover,
         "worst_net_loss_cp": worst_net_loss,
         "had_accepting_capture": had_accepting_capture,
-        "is_real_sacrifice": is_real_sac,
+        "is_real_sacrifice": is_real_sacrifice,
+        "is_big_sacrifice": is_big_sacrifice,
     })
 
     return SacrificeResult(
-        is_real_sacrifice=is_real_sac,
+        is_real_sacrifice=is_real_sacrifice,
+        is_big_sacrifice=is_big_sacrifice,
         worst_net_loss_cp=worst_net_loss,
         had_accepting_capture=had_accepting_capture,
         offered_piece_cp=offered_piece_cp,
@@ -224,8 +235,246 @@ def detect_sacrifice(
     )
 
 
-def is_real_sacrifice(board: chess.Board, move: chess.Move, params: Optional[SacrificeParams] = None) -> bool:
+def is_real_sacrifice(board: chess.Board, move: chess.Move,
+                      params: Optional[SacrificeParams] = None) -> bool:
+    """
+    Convenience helper for backwards compatibility:
+    returns True if it's at least a *small* sacrifice.
+    """
     return detect_sacrifice(board, move, params).is_real_sacrifice
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# PIECE_VALUES = {
+#     chess.PAWN:   100,
+#     chess.KNIGHT: 300,
+#     chess.BISHOP: 300,
+#     chess.ROOK:   500,
+#     chess.QUEEN:  900,
+# }
+
+
+# def material_gain_for_move(board: chess.Board, move: chess.Move) -> int:
+#     """
+#     Approximate immediate material gained (in centipawns) by playing `move`
+#     from `board`. Only looks at the captured piece (if any).
+#     """
+#     if not board.is_capture(move):
+#         return 0
+
+#     if board.is_en_passant(move):
+#         captured_type = chess.PAWN
+#     else:
+#         captured_piece = board.piece_at(move.to_square)
+#         if not captured_piece:
+#             return 0
+#         captured_type = captured_piece.piece_type
+
+#     return PIECE_VALUES.get(captured_type, 0)
+
+
+
+
+# def material_for_color(board: chess.Board, color: chess.Color) -> int:
+#     total = 0
+#     for ptype, val in PIECE_VALUES.items():
+#         total += len(board.pieces(ptype, color)) * val
+#     return total
+
+
+# # ======================================================================
+# # 1) SACRIFICE DETECTION
+# # ======================================================================
+
+# @dataclass
+# class SacrificeParams:
+#     """
+#     Thresholds for sacrifice detection.
+#     All values are in centipawns.
+#     """
+#     # Min *net* loss (after capture + ideal recapture) to treat as real sac
+#     net_loss_threshold_cp: int = 80   # ~ minor piece or better
+
+
+#     # Min face value of the offered piece (don’t call pawn nudges “sacs”)
+#     min_offered_piece_cp: int = 200    # tune if you want pawn sacs
+
+
+# @dataclass
+# class SacrificeResult:
+#     """
+#     Output of detect_sacrifice().
+#     """
+#     is_real_sacrifice: bool
+
+#     is_big_sacrifice: bool   # new
+#     # Logging info:
+#     worst_net_loss_cp: int          # max net (offered - taker) over accepting lines
+#     had_accepting_capture: bool
+#     offered_piece_cp: int
+#     num_attackers_opponent: int
+#     num_attackers_mover: int
+
+
+# def detect_sacrifice(
+#     board: chess.Board,
+#     move: chess.Move,
+#     params: Optional[SacrificeParams] = None,
+# ) -> SacrificeResult:
+#     """
+#     Detect whether `move` is a *real* material sacrifice, using local exchange logic.
+#     """
+#     if params is None:
+#         params = SacrificeParams()
+
+#     mover_color = board.turn
+#     opponent_color = not mover_color
+
+#     captured_cp = 0
+#     moving_piece = board.piece_at(move.from_square)
+
+#     if moving_piece is None:
+#         return SacrificeResult(
+#             is_real_sacrifice=False,
+#             worst_net_loss_cp=0,
+#             had_accepting_capture=False,
+#             offered_piece_cp=0,
+#             num_attackers_opponent=0,
+#             num_attackers_mover=0,
+#         )
+
+#     if board.is_capture(move):
+#         if board.is_en_passant(move):
+#             captured_cp = PIECE_VALUES[chess.PAWN]
+#         else:
+#             captured_piece = board.piece_at(move.to_square)
+#             if captured_piece and captured_piece.color == opponent_color:
+#                 captured_cp = PIECE_VALUES.get(captured_piece.piece_type, 0)
+
+#     # Apply our move: now it's opponent's turn
+#     b1 = board.copy(stack=False)
+#     b1.push(move)
+
+#     target_sq = move.to_square
+#     piece = b1.piece_at(target_sq)
+
+#     offered_piece_cp = 0
+#     num_attackers_opponent = 0
+#     num_attackers_mover = 0
+#     worst_net_loss = 0
+#     had_accepting_capture = False
+#     is_real_sac = False
+
+#     if piece is None or piece.color != mover_color:
+#         return SacrificeResult(
+#             is_real_sacrifice=False,
+#             worst_net_loss_cp=0,
+#             had_accepting_capture=False,
+#             offered_piece_cp=0,
+#             num_attackers_opponent=0,
+#             num_attackers_mover=0,
+#         )
+
+#     offered_piece_cp = PIECE_VALUES.get(piece.piece_type, 0)
+
+#     # How much net material are we really putting at risk,
+#     # after accounting for the piece we just captured?
+#     risk_face_cp = max(0, offered_piece_cp - captured_cp)
+
+#     # If risk_face_cp is small, don’t treat this as a sacrifice.
+#     if risk_face_cp < params.min_offered_piece_cp:
+#         return SacrificeResult(
+#             is_real_sacrifice=False,
+#             worst_net_loss_cp=0,
+#             had_accepting_capture=False,
+#             offered_piece_cp=offered_piece_cp,
+#             num_attackers_opponent=0,
+#             num_attackers_mover=0,
+#         )
+
+#     attackers_opponent = list(b1.attackers(opponent_color, target_sq))
+#     attackers_mover    = list(b1.attackers(mover_color, target_sq))
+
+#     num_attackers_opponent = len(attackers_opponent)
+#     num_attackers_mover    = len(attackers_mover)
+
+#     if num_attackers_opponent == 0:
+#         return SacrificeResult(
+#             is_real_sacrifice=False,
+#             worst_net_loss_cp=0,
+#             had_accepting_capture=False,
+#             offered_piece_cp=offered_piece_cp,
+#             num_attackers_opponent=num_attackers_opponent,
+#             num_attackers_mover=num_attackers_mover,
+#         )
+
+#     accepting_moves = [
+#         mv for mv in b1.legal_moves
+#         if b1.is_capture(mv) and mv.to_square == target_sq
+#     ]
+#     had_accepting_capture = len(accepting_moves) > 0
+
+#     for accept in accepting_moves:
+#         attacker_piece = b1.piece_at(accept.from_square)
+#         if attacker_piece is None:
+#             continue
+
+#         if attacker_piece.piece_type == chess.KING and num_attackers_mover > 0:
+#             # Ignore defended-king captures as "accepting the sac"
+#             continue
+
+#         attacker_val = PIECE_VALUES.get(attacker_piece.piece_type, 0)
+#         has_defender = num_attackers_mover > 0
+
+#         if not has_defender:
+#             net_loss = risk_face_cp
+#         else:
+#             net_loss = risk_face_cp - attacker_val
+
+#         if net_loss > worst_net_loss:
+#             worst_net_loss = net_loss
+
+    
+
+#     if had_accepting_capture and worst_net_loss >= params.net_loss_threshold_cp:
+#         is_real_sac = True
+
+#     print("SAC DEBUG:", {
+#         "move": move.uci(),
+#         "offered_piece_cp": offered_piece_cp,
+#         "captured_cp": captured_cp,
+#         "risk_face_cp": risk_face_cp,
+#         "num_attackers_opponent": num_attackers_opponent,
+#         "num_attackers_mover": num_attackers_mover,
+#         "worst_net_loss_cp": worst_net_loss,
+#         "had_accepting_capture": had_accepting_capture,
+#         "is_real_sacrifice": is_real_sac,
+#     })
+
+#     return SacrificeResult(
+#         is_real_sacrifice=is_real_sac,
+#         worst_net_loss_cp=worst_net_loss,
+#         had_accepting_capture=had_accepting_capture,
+#         offered_piece_cp=offered_piece_cp,
+#         num_attackers_opponent=num_attackers_opponent,
+#         num_attackers_mover=num_attackers_mover,
+#     )
+
+
+# def is_real_sacrifice(board: chess.Board, move: chess.Move, params: Optional[SacrificeParams] = None) -> bool:
+#     return detect_sacrifice(board, move, params).is_real_sacrifice
 
 
 # ======================================================================
@@ -443,6 +692,10 @@ class MissParams:
     # We keep this for possible future use, but we no longer rely on material gain logic
     missed_material_min_gain_cp: int = 200
 
+    # NEW: special handling for missed mates
+    mate_miss_max_plies: int = 4         # treat mate in ≤ 8 plies as a "tactical mate"
+    mate_miss_tolerance_plies: int = 1   # allow N, N+1 as "same" line, beyond that = missed
+
 
 def detect_miss(
     *,
@@ -475,7 +728,7 @@ def detect_miss(
     # ------------------------------------------------------------------
     if board is not None and move is not None:
         sac_result = detect_sacrifice(board, move)
-        if sac_result.is_real_sacrifice:
+        if sac_result.is_real_sacrifice or sac_result.is_big_sacrifice:
             print("MISS DEBUG: Not a miss because it's a sacrifice")
             return False
 
@@ -493,6 +746,7 @@ def detect_miss(
     miss_gap    = best_pov - after_pov
 
     situation_before = situation_from_cp(pre_pov)
+    situation_after  = situation_from_cp(after_pov)
 
     print("MISS DEBUG:", {
         "pre_pov": pre_pov,
@@ -503,12 +757,43 @@ def detect_miss(
         "opportunity": opportunity,
         "miss_gap": miss_gap,
         "situation_before": situation_before,
+        "situation_after": situation_after,
         "best_material_gain_cp": best_material_gain_cp,
         "played_material_gain_cp": played_material_gain_cp,
+        "best_mate_in_plies": best_mate_in_plies,
+        "played_mate_in_plies": played_mate_in_plies,
     })
 
     # ------------------------------------------------------------------
-    # 0) Global gates: don't call huge self-harm or busted positions "Miss"
+    # 0a) SPECIAL CASE: Missed forced mate but still winning
+    #     We bypass self_drop here because mate scores (~32000) explode CP.
+    # ------------------------------------------------------------------
+    if best_mate_in_plies is not None:
+        # We had a mate in N (for us) in the pre position
+        has_forced_mate = best_mate_in_plies <= params.mate_miss_max_plies
+
+        # Did our move *lose* that mate? (or significantly delay it)
+        lost_forced_mate = (
+            played_mate_in_plies is None or
+            played_mate_in_plies > best_mate_in_plies + params.mate_miss_tolerance_plies
+        )
+
+        if (
+            has_forced_mate and
+            lost_forced_mate and
+            situation_before in ("Winning", "Won") and
+            situation_after  in ("Winning", "Won")
+        ):
+            print("MISS DEBUG: missed_forced_mate_but_still_winning = True", {
+                "best_mate_in_plies": best_mate_in_plies,
+                "played_mate_in_plies": played_mate_in_plies,
+                "situation_before": situation_before,
+                "situation_after": situation_after,
+            })
+            return True
+
+    # ------------------------------------------------------------------
+    # 0b) Global gates: don't call huge self-harm or busted positions "Miss"
     # ------------------------------------------------------------------
     if self_drop > params.max_self_drop_cp:
         # too much self-harm: this is just a big error, not a Miss
@@ -546,15 +831,8 @@ def detect_miss(
     situation = situation_before
 
     # ------------------------------------------------------------------
-    # 3) Missed short mate / kill shot while still winning
-    # ------------------------------------------------------------------
-    if best_mate_in_plies is not None:
-        if best_pov >= params.still_winning_cp and after_pov >= params.still_winning_cp:
-            # You had a winning kill-shot and still remained winning but didn't play it.
-            return True
-
-    # ------------------------------------------------------------------
-    # 4) Missed conversion while clearly winning
+    # 3) Missed conversion while clearly winning
+    #    (mate-specific case handled earlier)
     # ------------------------------------------------------------------
     if (
         situation in ("Winning", "Won") and
@@ -565,7 +843,7 @@ def detect_miss(
         return True
 
     # ------------------------------------------------------------------
-    # 5) Missed defensive save (worse/lost -> drawable/OK)
+    # 4) Missed defensive save (worse/lost -> drawable/OK)
     # ------------------------------------------------------------------
     if situation in ("Worse", "Lost"):
         if (
@@ -575,7 +853,7 @@ def detect_miss(
             return True
 
     # ------------------------------------------------------------------
-    # 6) Missed conversion (small edge / equal -> big edge)
+    # 5) Missed conversion (small edge / equal -> big edge)
     # ------------------------------------------------------------------
     if situation in ("Winning", "Equalish"):
         if (
@@ -585,7 +863,7 @@ def detect_miss(
             return True
 
     # ------------------------------------------------------------------
-    # 7) Generic tactical Miss: equalish position, big tactical jump
+    # 6) Generic tactical Miss: equalish position, big tactical jump
     # ------------------------------------------------------------------
     is_equalish = abs(pre_pov) <= params.equal_band_cp
     is_big_tactical = (
@@ -597,12 +875,177 @@ def detect_miss(
         return True
 
     # ------------------------------------------------------------------
-    # 8) Fallback: generic "big opportunity missed"
+    # 7) Fallback: generic "big opportunity missed"
     # ------------------------------------------------------------------
     if opportunity >= params.min_opportunity_cp:
         return True
 
     return False
+
+
+
+
+
+
+# def detect_miss(
+#     *,
+#     eval_pre_white: float,
+#     eval_after_white: float,
+#     eval_played_pre_white: float,
+#     eval_best_pre_white: Optional[float],
+#     mover_color: str,
+#     best_mate_in_plies: Optional[int] = None,
+#     played_mate_in_plies: Optional[int] = None,
+
+#     # Currently unused, kept only for API compatibility
+#     best_material_gain_cp: Optional[float] = None,
+#     played_material_gain_cp: Optional[float] = None,
+
+#     # Board and move for sacrifice detection
+#     board: Optional[chess.Board] = None,
+#     move: Optional[chess.Move] = None,
+
+#     params: Optional[MissParams] = None,
+# ) -> bool:
+#     if params is None:
+#         params = MissParams()
+
+#     if eval_best_pre_white is None:
+#         return False
+
+#     # ------------------------------------------------------------------
+#     # Check if the move is a sacrifice - sacrifices are not misses
+#     # ------------------------------------------------------------------
+#     if board is not None and move is not None:
+#         sac_result = detect_sacrifice(board, move)
+#         if sac_result.is_real_sacrifice or sac_result.is_big_sacrifice:
+#             print("MISS DEBUG: Not a miss because it's a sacrifice")
+#             return False
+
+#     # Convert all evals to mover POV
+#     pre_pov     = cp_for_player(eval_pre_white,        mover_color)
+#     after_pov   = cp_for_player(eval_after_white,      mover_color)
+#     played_pov  = cp_for_player(eval_played_pre_white, mover_color)
+#     best_pov    = cp_for_player(eval_best_pre_white,   mover_color)
+
+#     # PRE → POST drop for mover
+#     self_drop   = pre_pov - after_pov          # >0 means we got worse
+#     # "Opportunity" from PRE: best vs played
+#     opportunity = best_pov - played_pov        # how much better best was than our move
+#     # How much better best would be than final position
+#     miss_gap    = best_pov - after_pov
+
+#     situation_before = situation_from_cp(pre_pov)
+
+#     print("MISS DEBUG:", {
+#         "pre_pov": pre_pov,
+#         "after_pov": after_pov,
+#         "played_pov": played_pov,
+#         "best_pov": best_pov,
+#         "self_drop": self_drop,
+#         "opportunity": opportunity,
+#         "miss_gap": miss_gap,
+#         "situation_before": situation_before,
+#         "best_material_gain_cp": best_material_gain_cp,
+#         "played_material_gain_cp": played_material_gain_cp,
+#     })
+
+#     # ------------------------------------------------------------------
+#     # 0) Global gates: don't call huge self-harm or busted positions "Miss"
+#     # ------------------------------------------------------------------
+#     if self_drop > params.max_self_drop_cp:
+#         # too much self-harm: this is just a big error, not a Miss
+#         return False
+
+#     if after_pov <= -params.still_ok_cp:
+#         # We're clearly worse after the move: that's a real blunder, not just a Miss.
+#         return False
+
+#     # ------------------------------------------------------------------
+#     # 1) Simple CP-based Miss:
+#     #    Engine's best move is much better than what we played.
+#     #    Use 'opportunity' (best_pov - played_pov) as the shot size.
+#     # ------------------------------------------------------------------
+#     cp_shot = max(opportunity, miss_gap)  # usually equal to opportunity
+
+#     if (
+#         cp_shot >= params.tactical_min_gain_cp and   # big tactical chance (e.g. ≥ 300cp)
+#         self_drop <= params.max_self_drop_cp and     # we didn't totally ruin our position
+#         after_pov > -params.still_ok_cp              # still not completely lost
+#     ):
+#         print("MISS DEBUG: simple_cp_based_miss = True", {
+#             "cp_shot": cp_shot,
+#             "opportunity": opportunity,
+#             "miss_gap": miss_gap,
+#         })
+#         return True
+
+#     # ------------------------------------------------------------------
+#     # 2) If *no* clear tactical / eval chance, no Miss
+#     # ------------------------------------------------------------------
+#     if opportunity < params.min_opportunity_cp and miss_gap < params.min_opportunity_cp:
+#         return False
+
+#     situation = situation_before
+
+#     # ------------------------------------------------------------------
+#     # 3) Missed short mate / kill shot while still winning
+#     # ------------------------------------------------------------------
+#     if best_mate_in_plies is not None:
+#         if best_pov >= params.still_winning_cp and after_pov >= params.still_winning_cp:
+#             # You had a winning kill-shot and still remained winning but didn't play it.
+#             return True
+
+#     # ------------------------------------------------------------------
+#     # 4) Missed conversion while clearly winning
+#     # ------------------------------------------------------------------
+#     if (
+#         situation in ("Winning", "Won") and
+#         pre_pov   >= params.still_winning_cp and
+#         best_pov  >= pre_pov + params.tactical_min_gain_cp and
+#         after_pov >= params.still_winning_cp
+#     ):
+#         return True
+
+#     # ------------------------------------------------------------------
+#     # 5) Missed defensive save (worse/lost -> drawable/OK)
+#     # ------------------------------------------------------------------
+#     if situation in ("Worse", "Lost"):
+#         if (
+#             opportunity >= params.min_save_gain_cp and
+#             best_pov   >= -params.still_ok_cp
+#         ):
+#             return True
+
+#     # ------------------------------------------------------------------
+#     # 6) Missed conversion (small edge / equal -> big edge)
+#     # ------------------------------------------------------------------
+#     if situation in ("Winning", "Equalish"):
+#         if (
+#             opportunity >= params.min_conversion_gain_cp and
+#             best_pov   >= pre_pov + params.min_conversion_gain_cp
+#         ):
+#             return True
+
+#     # ------------------------------------------------------------------
+#     # 7) Generic tactical Miss: equalish position, big tactical jump
+#     # ------------------------------------------------------------------
+#     is_equalish = abs(pre_pov) <= params.equal_band_cp
+#     is_big_tactical = (
+#         best_pov >= pre_pov + params.tactical_min_gain_cp and
+#         best_pov >= params.tactical_min_gain_cp
+#     )
+
+#     if is_equalish and is_big_tactical:
+#         return True
+
+#     # ------------------------------------------------------------------
+#     # 8) Fallback: generic "big opportunity missed"
+#     # ------------------------------------------------------------------
+#     if opportunity >= params.min_opportunity_cp:
+#         return True
+
+#     return False
 
 
 
@@ -1105,10 +1548,12 @@ class SacBrilliancyResult:
     adv_after_accept: Optional[float]
     gap_to_best_cp: Optional[float]
     is_real_sacrifice: bool
+    is_big_sacrifice: bool   # ← ADD THIS
 
 
 def adv_for_mover(eval_white_cp: float, mover_color: str) -> float:
     return eval_white_cp if mover_color == "w" else -eval_white_cp
+
 
 
 
@@ -1133,8 +1578,8 @@ def detect_sac_brilliancy(
     if params is None:
         params = SacBrilliancyParams()
 
-    # If not a real sac, never Brilliant
-    if not sac_result.is_real_sacrifice:
+    # If not a *big* sac, never Brilliant
+    if not sac_result.is_big_sacrifice:
         return SacBrilliancyResult(
             is_brilliant=False,
             reason="not_sacrifice",
@@ -1142,7 +1587,8 @@ def detect_sac_brilliancy(
             adv_after_best_reply=adv_for_mover(eval_best_reply_white, mover_color),
             adv_after_accept=None if eval_accept_white is None else adv_for_mover(eval_accept_white, mover_color),
             gap_to_best_cp=None,
-            is_real_sacrifice=False,
+            is_real_sacrifice=sac_result.is_real_sacrifice,
+            is_big_sacrifice=False,
         )
 
     # --- 1) Base advantages (mover POV) ---
@@ -1155,113 +1601,77 @@ def detect_sac_brilliancy(
         adv_after_accept = adv_for_mover(eval_accept_white, mover_color)
 
     # Game states based on mover POV
-    before_state = situation_from_cp(adv_before_mover)   # Won / Winning / Equalish / Worse / Lost
-    after_state  = situation_from_cp(adv_after_reply)    # we care about worst-case (best reply), not just after_move
+    before_state = situation_from_cp(adv_before_mover)
+    after_state  = situation_from_cp(adv_after_reply)
 
     # --- 2) Gap to best from PRE (mover POV) ---
     gap_to_best: Optional[float] = None
     if eval_best_pre_white is not None:
         played_pre = eval_played_pre_white if eval_played_pre_white is not None else eval_after_white
         if mover_color == 'w':
-            # best - played: positive = we lost something vs best
             gap_to_best = eval_best_pre_white - played_pre
         else:
-            # For Black, more negative is better. played - best: positive = we lost something.
             gap_to_best = played_pre - eval_best_pre_white
 
     gap_ok = True
     if gap_to_best is not None:
         gap_ok = (gap_to_best <= params.max_gap_to_best_cp)
 
-    # --- 3) Drop in advantage after BEST reply ---
+    # --- 3) Advantage drop after best reply ---
     adv_drop = adv_before_mover - adv_after_reply
 
     drop_ok = True
     if adv_before_mover > params.win_after_reply_cp:
-        # If we were already clearly winning, don't allow a huge drop
         drop_ok = (adv_drop <= params.max_adv_drop_cp)
 
-    # --- 4) Thresholds reused from your original code ---
-    lost_threshold_cp = 300
-    draw_band_cp      = 60
-    mate_max_plies    = 6   # M4/M5/M6 style brilliancies
-
-    # ==================================================================
-    # A) STATE-BASED WINNING SAC  (Equalish/Won → Winning/Won)
-    # ==================================================================
     win_after_reply_ok = (adv_after_reply >= params.win_after_reply_cp)
 
     if eval_accept_white is not None:
         win_after_accept_ok = (adv_after_accept is not None and adv_after_accept >= params.win_after_accept_cp)
     else:
-        win_after_accept_ok = True  # if no accept eval, don't block on this
+        win_after_accept_ok = True
+
+    # Mate rescue / attack flags (optional, you already had these)
+    lost_threshold_cp = 300
+    draw_band_cp      = 60
 
     winning_sac = (
-        sac_result.is_real_sacrifice
-        and before_state in ("Equalish", "Winning", "Won")
-        and after_state  in ("Winning", "Won")
-        and win_after_reply_ok
-        and win_after_accept_ok
-        and gap_ok
-        and drop_ok
+        sac_result.is_real_sacrifice and
+        before_state in ("Equalish", "Winning", "Won") and
+        after_state  in ("Winning", "Won")
     )
 
-    # ==================================================================
-    # B) STATE-BASED DRAW-RESCUE SAC (Lost/Worse → Equalish)
-    # ==================================================================
     draw_rescue_sac = (
-        sac_result.is_real_sacrifice
-        and before_state in ("Worse", "Lost")
-        and after_state  in ("Equalish", "Winning")
-        and adv_before_mover <= -lost_threshold_cp
-        and abs(adv_after_reply) <= draw_band_cp
-        and (adv_after_accept is None or abs(adv_after_accept) <= draw_band_cp)
-        and gap_ok
+        sac_result.is_real_sacrifice and
+        before_state in ("Worse", "Lost") and
+        abs(adv_after_reply) <= draw_band_cp
     )
 
-    # ==================================================================
-    # C) MATE-ATTACK BRILLIANCY (Equalish/Worse/Lost → sac → M≤6 for mover)
-    # ==================================================================
-    mate_attack_sac = False
-    if mate_for_mover_after is not None and mate_for_mover_after <= mate_max_plies:
-        if before_state in ("Equalish", "Worse", "Lost"):
-            # We weren't already just mating them, now we have a forcing attack
-            mate_attack_sac = (
-                sac_result.is_real_sacrifice
-                and gap_ok
-            )
+    mate_attack_sac = (
+        mate_for_mover_after is not None and
+        mate_for_mover_after <= 5
+    )
 
-    # ==================================================================
-    # D) MATE-DEFENSE BRILLIANCY (they had mate, sac busts it)
-    # ==================================================================
-    mate_defense_sac = False
-    if mate_for_opponent_before is not None and mate_for_opponent_before <= mate_max_plies:
-        # Opponent had a near mate
-        no_more_mate = (
-            mate_for_opponent_after is None or
-            mate_for_opponent_after > mate_for_opponent_before + 4
-        )
-        if no_more_mate and before_state in ("Worse", "Lost"):
-            mate_defense_sac = (
-                sac_result.is_real_sacrifice
-                and gap_ok
-            )
+    mate_defense_sac = (
+        mate_for_opponent_before is not None and
+        mate_for_opponent_before <= 5 and
+        (mate_for_opponent_after is None or mate_for_opponent_after > mate_for_opponent_before + 2)
+    )
 
-    # ==================================================================
-    # FINAL DECISION
-    # ==================================================================
-    is_brilliant = winning_sac or draw_rescue_sac or mate_attack_sac or mate_defense_sac
+    # Final Brilliant flag
+    is_brilliant = (
+        sac_result.is_big_sacrifice and
+        gap_ok and
+        drop_ok and
+        (winning_sac or draw_rescue_sac or mate_attack_sac or mate_defense_sac) and
+        win_after_reply_ok and
+        win_after_accept_ok
+    )
 
-    if winning_sac:
-        reason = "real_sac_still_winning_after_reply_and_accept"
-    elif draw_rescue_sac:
-        reason = "real_sac_draw_rescue_state_based"
-    elif mate_attack_sac:
-        reason = "real_sac_creates_forcing_mate_for_mover"
-    elif mate_defense_sac:
-        reason = "real_sac_defends_against_near_mate"
+    # Reason string (for debug)
+    if is_brilliant:
+        reason = "brilliant_sacrifice"
     else:
-        # Keep detailed reasons to debug why a sac failed brilliancy tests
         if not gap_ok:
             reason = "engine_hates_sac_gap_too_large"
         elif not drop_ok:
@@ -1284,6 +1694,7 @@ def detect_sac_brilliancy(
         "gap_to_best_cp": gap_to_best,
         "adv_drop": adv_drop,
         "is_real_sacrifice": sac_result.is_real_sacrifice,
+        "is_big_sacrifice": sac_result.is_big_sacrifice,
         "winning_sac": winning_sac,
         "draw_rescue_sac": draw_rescue_sac,
         "mate_attack_sac": mate_attack_sac,
@@ -1304,7 +1715,203 @@ def detect_sac_brilliancy(
         adv_after_accept=adv_after_accept,
         gap_to_best_cp=gap_to_best,
         is_real_sacrifice=sac_result.is_real_sacrifice,
+        is_big_sacrifice=sac_result.is_big_sacrifice,
     )
+
+
+# def detect_sac_brilliancy(
+#     *,
+#     eval_before_white: float,
+#     eval_after_white: float,
+#     eval_best_pre_white: Optional[float],
+#     eval_played_pre_white: Optional[float],
+#     eval_best_reply_white: float,
+#     eval_accept_white: Optional[float],
+#     mover_color: str,
+#     sac_result: SacrificeResult,
+#     params: Optional[SacBrilliancyParams] = None,
+
+#     # NEW (optional): mate info from the engine, in plies
+#     mate_for_mover_before: Optional[int] = None,
+#     mate_for_mover_after: Optional[int] = None,
+#     mate_for_opponent_before: Optional[int] = None,
+#     mate_for_opponent_after: Optional[int] = None,
+# ) -> SacBrilliancyResult:
+#     if params is None:
+#         params = SacBrilliancyParams()
+
+#     # If not a real sac, never Brilliant
+#     if not sac_result.is_big_sacrifice:
+#         return SacBrilliancyResult(
+#             is_brilliant=False,
+#             reason="not_sacrifice",
+#             adv_before_mover=adv_for_mover(eval_before_white, mover_color),
+#             adv_after_best_reply=adv_for_mover(eval_best_reply_white, mover_color),
+#             adv_after_accept=None if eval_accept_white is None else adv_for_mover(eval_accept_white, mover_color),
+#             gap_to_best_cp=None,
+#             is_big_sacrifice=False,
+#         )
+
+#     # --- 1) Base advantages (mover POV) ---
+#     adv_before_mover = adv_for_mover(eval_before_white, mover_color)
+#     adv_after_reply  = adv_for_mover(eval_best_reply_white, mover_color)
+#     adv_after_move   = adv_for_mover(eval_after_white,  mover_color)
+
+#     adv_after_accept: Optional[float] = None
+#     if eval_accept_white is not None:
+#         adv_after_accept = adv_for_mover(eval_accept_white, mover_color)
+
+#     # Game states based on mover POV
+#     before_state = situation_from_cp(adv_before_mover)   # Won / Winning / Equalish / Worse / Lost
+#     after_state  = situation_from_cp(adv_after_reply)    # we care about worst-case (best reply), not just after_move
+
+#     # --- 2) Gap to best from PRE (mover POV) ---
+#     gap_to_best: Optional[float] = None
+#     if eval_best_pre_white is not None:
+#         played_pre = eval_played_pre_white if eval_played_pre_white is not None else eval_after_white
+#         if mover_color == 'w':
+#             # best - played: positive = we lost something vs best
+#             gap_to_best = eval_best_pre_white - played_pre
+#         else:
+#             # For Black, more negative is better. played - best: positive = we lost something.
+#             gap_to_best = played_pre - eval_best_pre_white
+
+#     gap_ok = True
+#     if gap_to_best is not None:
+#         gap_ok = (gap_to_best <= params.max_gap_to_best_cp)
+
+#     # --- 3) Drop in advantage after BEST reply ---
+#     adv_drop = adv_before_mover - adv_after_reply
+
+#     drop_ok = True
+#     if adv_before_mover > params.win_after_reply_cp:
+#         # If we were already clearly winning, don't allow a huge drop
+#         drop_ok = (adv_drop <= params.max_adv_drop_cp)
+
+#     # --- 4) Thresholds reused from your original code ---
+#     lost_threshold_cp = 300
+#     draw_band_cp      = 60
+#     mate_max_plies    = 6   # M4/M5/M6 style brilliancies
+
+#     # ==================================================================
+#     # A) STATE-BASED WINNING SAC  (Equalish/Won → Winning/Won)
+#     # ==================================================================
+#     win_after_reply_ok = (adv_after_reply >= params.win_after_reply_cp)
+
+#     if eval_accept_white is not None:
+#         win_after_accept_ok = (adv_after_accept is not None and adv_after_accept >= params.win_after_accept_cp)
+#     else:
+#         win_after_accept_ok = True  # if no accept eval, don't block on this
+
+#     winning_sac = (
+#         sac_result.is_big_sacrifice
+#         and before_state in ("Equalish", "Winning", "Won")
+#         and after_state  in ("Winning", "Won")
+#         and win_after_reply_ok
+#         and win_after_accept_ok
+#         and gap_ok
+#         and drop_ok
+#     )
+
+#     # ==================================================================
+#     # B) STATE-BASED DRAW-RESCUE SAC (Lost/Worse → Equalish)
+#     # ==================================================================
+#     draw_rescue_sac = (
+#         sac_result.is_big_sacrifice
+#         and before_state in ("Worse", "Lost")
+#         and after_state  in ("Equalish", "Winning")
+#         and adv_before_mover <= -lost_threshold_cp
+#         and abs(adv_after_reply) <= draw_band_cp
+#         and (adv_after_accept is None or abs(adv_after_accept) <= draw_band_cp)
+#         and gap_ok
+#     )
+
+#     # ==================================================================
+#     # C) MATE-ATTACK BRILLIANCY (Equalish/Worse/Lost → sac → M≤6 for mover)
+#     # ==================================================================
+#     mate_attack_sac = False
+#     if mate_for_mover_after is not None and mate_for_mover_after <= mate_max_plies:
+#         if before_state in ("Equalish", "Worse", "Lost"):
+#             # We weren't already just mating them, now we have a forcing attack
+#             mate_attack_sac = (
+#                 sac_result.is_big_sacrifice
+#                 and gap_ok
+#             )
+
+#     # ==================================================================
+#     # D) MATE-DEFENSE BRILLIANCY (they had mate, sac busts it)
+#     # ==================================================================
+#     mate_defense_sac = False
+#     if mate_for_opponent_before is not None and mate_for_opponent_before <= mate_max_plies:
+#         # Opponent had a near mate
+#         no_more_mate = (
+#             mate_for_opponent_after is None or
+#             mate_for_opponent_after > mate_for_opponent_before + 4
+#         )
+#         if no_more_mate and before_state in ("Worse", "Lost"):
+#             mate_defense_sac = (
+#                 sac_result.is_big_sacrifice
+#                 and gap_ok
+#             )
+
+#     # ==================================================================
+#     # FINAL DECISION
+#     # ==================================================================
+#     is_brilliant = winning_sac or draw_rescue_sac or mate_attack_sac or mate_defense_sac
+
+#     if winning_sac:
+#         reason = "real_sac_still_winning_after_reply_and_accept"
+#     elif draw_rescue_sac:
+#         reason = "real_sac_draw_rescue_state_based"
+#     elif mate_attack_sac:
+#         reason = "real_sac_creates_forcing_mate_for_mover"
+#     elif mate_defense_sac:
+#         reason = "real_sac_defends_against_near_mate"
+#     else:
+#         # Keep detailed reasons to debug why a sac failed brilliancy tests
+#         if not gap_ok:
+#             reason = "engine_hates_sac_gap_too_large"
+#         elif not drop_ok:
+#             reason = "too_much_advantage_lost_after_best_reply"
+#         elif not win_after_reply_ok and not draw_rescue_sac:
+#             reason = "not_winning_after_best_reply"
+#         elif eval_accept_white is not None and not win_after_accept_ok:
+#             reason = "not_winning_after_accept"
+#         else:
+#             reason = "conditions_not_met"
+
+#     print("BRILL DEBUG (SAC-BASED):", {
+#         "mover_color": mover_color,
+#         "adv_before_mover": adv_before_mover,
+#         "adv_after_best_reply": adv_after_reply,
+#         "adv_after_move": adv_after_move,
+#         "adv_after_accept": adv_after_accept,
+#         "before_state": before_state,
+#         "after_state": after_state,
+#         "gap_to_best_cp": gap_to_best,
+#         "adv_drop": adv_drop,
+#         "is_real_sacrifice": sac_result.is_big_sacrifice,
+#         "winning_sac": winning_sac,
+#         "draw_rescue_sac": draw_rescue_sac,
+#         "mate_attack_sac": mate_attack_sac,
+#         "mate_defense_sac": mate_defense_sac,
+#         "mate_for_mover_before": mate_for_mover_before,
+#         "mate_for_mover_after": mate_for_mover_after,
+#         "mate_for_opponent_before": mate_for_opponent_before,
+#         "mate_for_opponent_after": mate_for_opponent_after,
+#         "is_brilliant": is_brilliant,
+#         "reason": reason,
+#     })
+
+#     return SacBrilliancyResult(
+#         is_brilliant=is_brilliant,
+#         reason=reason,
+#         adv_before_mover=adv_before_mover,
+#         adv_after_best_reply=adv_after_reply,
+#         adv_after_accept=adv_after_accept,
+#         gap_to_best_cp=gap_to_best,
+#         is_real_sacrifice=sac_result.is_big_sacrifice,
+#     )
 
 
 
