@@ -14,8 +14,10 @@ export default function EvaluationBar({ score, fen, height = 560 }) {
     // Extract whose turn it is from FEN
     const turn = fen.split(' ')[1]; // 'w' or 'b'
 
-    // If it's Black's turn, we need to flip the score
-    // because engine gives score from side-to-move perspective
+    // Stockfish returns evaluation from side-to-move perspective:
+    // - Positive value = good for the side to move
+    // - When Black to move: +4.65 means Black is winning
+    // - We need to flip to White's perspective: -4.65 (White is losing)
     if (turn === 'b') {
       return {
         type: score.type,

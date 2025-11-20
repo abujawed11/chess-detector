@@ -1,6 +1,6 @@
 // PlayComputer.jsx - Play against Stockfish with ELO-based difficulty
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { useStockfish } from './hooks/useStockfish';
 import InteractiveBoard from './components/InteractiveBoard';
@@ -35,6 +35,25 @@ export default function PlayComputer() {
   const [isComputerThinking, setIsComputerThinking] = useState(false);
   const [gameResult, setGameResult] = useState(null); // null, 'win', 'loss', 'draw'
   const [gameResultMessage, setGameResultMessage] = useState('');
+
+  // Create a pre-normalized evaluation for display
+  // Since EvaluationBar already normalizes based on FEN, we store as-is
+  // But we'll pass a custom FEN to prevent double-flipping
+  // const evalForDisplay = useMemo(() => {
+  //   if (!currentEval || !currentFen) return null;
+
+  //   const turn = currentFen.split(' ')[1];
+
+  //   // The engine returns score from side-to-move perspective
+  //   // Normalize to White's perspective here
+  //   if (turn === 'b') {
+  //     return {
+  //       type: currentEval.type,
+  //       value: -currentEval.value
+  //     };
+  //   }
+  //   return currentEval;
+  // }, [currentEval, currentFen]);
 
   const { initialized, analyzing, analyze, error } = useStockfish();
   const computerMoveTimeoutRef = useRef(null);
@@ -102,7 +121,6 @@ export default function PlayComputer() {
           const newFen = game.fen();
           setCurrentFen(newFen);
           setLastMove({ from, to });
-          setCurrentEval(result.evaluation);
 
           // Add to move history
           const newMove = {
@@ -118,7 +136,19 @@ export default function PlayComputer() {
           setCurrentMoveIndex(prev => prev + 1);
 
           // Check for game over
-          checkGameOver(newFen);
+          const isOver = checkGameOver(newFen);
+
+          // Analyze the NEW position to get correct evaluation
+          if (!isOver) {
+            try {
+              const newResult = await analyze(newFen, { depth: Math.min(difficulty.depth, 10), multiPV: 1 });
+              if (newResult?.evaluation) {
+                setCurrentEval(newResult.evaluation);
+              }
+            } catch (err) {
+              console.error('Post-move analysis error:', err);
+            }
+          }
         }
       }
     } catch (err) {
@@ -143,6 +173,28 @@ export default function PlayComputer() {
       }
     };
   }, [gameStarted, initialized, isComputerTurn, isComputerThinking, makeComputerMove, gameResult]);
+
+
+
+  // Convert engine eval (side-to-move POV) into White's POV
+  function normalizeEvalToWhite(fen, evaluation) {
+    if (!evaluation) return null;
+
+    const parts = fen.split(' ');
+    const turn = parts[1]; // 'w' or 'b'
+
+    // Clone to avoid mutating original
+    const norm = { ...evaluation };
+
+    // For cp and mate both, sign indicates who is better / who is mating
+    if (turn === 'b') {
+      norm.value = -norm.value;
+    }
+    // if turn === 'w', value is already White POV
+
+    return norm;
+  }
+
 
   // Check for game over
   const checkGameOver = useCallback((fen) => {
@@ -211,8 +263,22 @@ export default function PlayComputer() {
     setCurrentMoveIndex(prev => prev + 1);
 
     // Check for game over
-    checkGameOver(newFen);
-  }, [gameStarted, isComputerTurn, gameResult, game, checkGameOver]);
+    const isOver = checkGameOver(newFen);
+
+    // Analyze position after player's move to update evaluation
+    if (!isOver && initialized) {
+      try {
+        const result = await analyze(newFen, { depth: Math.min(difficulty.depth, 12), multiPV: 1 });
+        if (result?.evaluation) {
+          setCurrentEval(result.evaluation);  // raw from engine
+          console.log("Current Eval",result.evaluation)
+          ;
+        }
+      } catch (err) {
+        console.error('Quick analysis error:', err);
+      }
+    }
+  }, [gameStarted, isComputerTurn, gameResult, game, checkGameOver, initialized, analyze, difficulty.depth]);
 
   // Resign game
   const resign = useCallback(() => {
@@ -282,7 +348,7 @@ export default function PlayComputer() {
   // Game setup screen
   if (!gameStarted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-10">
+      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 py-10">
         <div className="mx-auto max-w-2xl px-6">
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-bold text-white mb-2">Play vs Computer</h1>
@@ -296,11 +362,10 @@ export default function PlayComputer() {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => setPlayerColor('w')}
-                  className={`rounded-xl p-6 text-center transition ${
-                    playerColor === 'w'
+                  className={`rounded-xl p-6 text-center transition ${playerColor === 'w'
                       ? 'bg-white text-slate-900 shadow-lg ring-4 ring-green-500 ring-offset-2 ring-offset-slate-900'
                       : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
+                    }`}
                 >
                   <div className="text-5xl mb-2">♔</div>
                   <div className="font-bold flex items-center justify-center gap-2">
@@ -311,11 +376,10 @@ export default function PlayComputer() {
                 </button>
                 <button
                   onClick={() => setPlayerColor('b')}
-                  className={`rounded-xl p-6 text-center transition ${
-                    playerColor === 'b'
+                  className={`rounded-xl p-6 text-center transition ${playerColor === 'b'
                       ? 'bg-slate-800 text-white shadow-lg ring-4 ring-green-500 ring-offset-2 ring-offset-slate-900'
                       : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
+                    }`}
                 >
                   <div className="text-5xl mb-2">♚</div>
                   <div className="font-bold flex items-center justify-center gap-2">
@@ -335,11 +399,10 @@ export default function PlayComputer() {
                   <button
                     key={level.name}
                     onClick={() => setDifficulty(level)}
-                    className={`w-full rounded-lg p-4 text-left transition ${
-                      difficulty.name === level.name
+                    className={`w-full rounded-lg p-4 text-left transition ${difficulty.name === level.name
                         ? 'bg-green-600 text-white ring-2 ring-green-400 ring-offset-2 ring-offset-slate-900'
                         : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -362,9 +425,8 @@ export default function PlayComputer() {
             </div>
 
             {/* Engine status */}
-            <div className={`mb-6 rounded-lg p-4 ${
-              initialized ? 'bg-green-600/20 text-green-400' : 'bg-amber-600/20 text-amber-400'
-            }`}>
+            <div className={`mb-6 rounded-lg p-4 ${initialized ? 'bg-green-600/20 text-green-400' : 'bg-amber-600/20 text-amber-400'
+              }`}>
               <div className="flex items-center gap-2">
                 {initialized ? (
                   <>
@@ -384,11 +446,10 @@ export default function PlayComputer() {
             <button
               onClick={startGame}
               disabled={!initialized}
-              className={`w-full rounded-xl py-4 text-xl font-bold transition ${
-                initialized
+              className={`w-full rounded-xl py-4 text-xl font-bold transition ${initialized
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-slate-600 text-slate-400 cursor-not-allowed'
-              }`}
+                }`}
             >
               {initialized ? 'Start Game' : 'Waiting for engine...'}
             </button>
@@ -411,11 +472,10 @@ export default function PlayComputer() {
             </span>
           </h2>
           <div className="flex items-center gap-4 text-sm">
-            <span className={`rounded-lg px-3 py-1 ${
-              turn === playerColor
+            <span className={`rounded-lg px-3 py-1 ${turn === playerColor
                 ? 'bg-green-100 text-green-700 font-bold'
                 : 'bg-slate-100 text-slate-600'
-            }`}>
+              }`}>
               {turn === 'w' ? 'White' : 'Black'} to move
               {turn === playerColor && ' (You)'}
               {turn !== playerColor && ' (Computer)'}
@@ -466,13 +526,12 @@ export default function PlayComputer() {
 
       {/* Game result banner */}
       {gameResult && (
-        <div className={`mb-4 rounded-xl p-4 text-center text-lg font-bold ${
-          gameResult === 'win'
+        <div className={`mb-4 rounded-xl p-4 text-center text-lg font-bold ${gameResult === 'win'
             ? 'bg-green-100 text-green-700'
             : gameResult === 'loss'
               ? 'bg-red-100 text-red-700'
               : 'bg-amber-100 text-amber-700'
-        }`}>
+          }`}>
           {gameResultMessage}
           <button
             onClick={newGame}
@@ -488,8 +547,13 @@ export default function PlayComputer() {
         {/* Left side: Evaluation bar + Board */}
         <div className="flex items-start gap-4">
           {/* Evaluation bar */}
-          <div className="w-12 flex-shrink-0">
-            <EvaluationBar score={currentEval} fen={currentFen} height={680} />
+          <div className="w-12 shrink-0">
+            {/* Pass raw eval with real FEN - EvaluationBar will normalize to White's perspective */}
+            <EvaluationBar
+              score={currentEval}
+              fen={currentFen}
+              height={680}
+            />
           </div>
 
           {/* Board column */}
@@ -545,7 +609,7 @@ export default function PlayComputer() {
         </div>
 
         {/* Right panel */}
-        <div className="w-full max-w-[400px] space-y-3 xl:sticky xl:top-4 xl:w-[400px] xl:flex-shrink-0">
+        <div className="w-full max-w-[400px] space-y-3 xl:sticky xl:top-4 xl:w-[400px] xl:shrink-0">
           {/* Computer thinking indicator */}
           {isComputerThinking && (
             <div className="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 shadow">
@@ -586,15 +650,14 @@ export default function PlayComputer() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow">
             <h3 className="mb-2 font-bold text-slate-700">Evaluation</h3>
             {currentEval ? (
-              <div className={`font-mono text-2xl font-extrabold ${
-                currentEval.type === 'mate'
+              <div className={`font-mono text-2xl font-extrabold ${currentEval.type === 'mate'
                   ? 'text-red-700'
                   : currentEval.value > 0
                     ? 'text-green-600'
                     : currentEval.value < 0
                       ? 'text-blue-900'
                       : 'text-slate-700'
-              }`}>
+                }`}>
                 {currentEval.type === 'mate'
                   ? `Mate in ${Math.abs(currentEval.value)}`
                   : `${(currentEval.value / 100).toFixed(2)}`}
