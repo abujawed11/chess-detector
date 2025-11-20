@@ -56,7 +56,8 @@ class SacrificeParams:
     All values are in centipawns.
     """
     # Min *net* loss (after capture + ideal recapture) to treat as real sac
-    net_loss_threshold_cp: int = 180   # ~ minor piece or better
+    net_loss_threshold_cp: int = 80   # ~ minor piece or better
+
 
     # Min face value of the offered piece (don’t call pawn nudges “sacs”)
     min_offered_piece_cp: int = 200    # tune if you want pawn sacs
@@ -68,6 +69,8 @@ class SacrificeResult:
     Output of detect_sacrifice().
     """
     is_real_sacrifice: bool
+
+    is_big_sacrifice: bool   # new
     # Logging info:
     worst_net_loss_cp: int          # max net (offered - taker) over accepting lines
     had_accepting_capture: bool
@@ -193,6 +196,8 @@ def detect_sacrifice(
 
         if net_loss > worst_net_loss:
             worst_net_loss = net_loss
+
+    
 
     if had_accepting_capture and worst_net_loss >= params.net_loss_threshold_cp:
         is_real_sac = True
@@ -453,6 +458,10 @@ def detect_miss(
     best_material_gain_cp: Optional[float] = None,
     played_material_gain_cp: Optional[float] = None,
 
+    # Board and move for sacrifice detection
+    board: Optional[chess.Board] = None,
+    move: Optional[chess.Move] = None,
+
     params: Optional[MissParams] = None,
 ) -> bool:
     if params is None:
@@ -460,6 +469,15 @@ def detect_miss(
 
     if eval_best_pre_white is None:
         return False
+
+    # ------------------------------------------------------------------
+    # Check if the move is a sacrifice - sacrifices are not misses
+    # ------------------------------------------------------------------
+    if board is not None and move is not None:
+        sac_result = detect_sacrifice(board, move)
+        if sac_result.is_real_sacrifice:
+            print("MISS DEBUG: Not a miss because it's a sacrifice")
+            return False
 
     # Convert all evals to mover POV
     pre_pov     = cp_for_player(eval_pre_white,        mover_color)

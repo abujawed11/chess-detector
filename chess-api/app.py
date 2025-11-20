@@ -793,8 +793,8 @@ async def evaluate_move(
             played_mate_in_plies=played_mate_in,
             best_material_gain_cp=best_material_gain_cp,
             played_material_gain_cp=played_material_gain_cp,
-            # board_before=board_before,           # NEW
-            # best_move_uci=best_move_uci,         # NEW
+            board=board_before,
+            move=uci_move_obj,
         )
 
 
