@@ -609,6 +609,7 @@ async def evaluate_move(
         # --- NEW: material gain for best move vs played move (from PRE position) ---
         best_material_gain_cp = None
         played_material_gain_cp = None
+        best_move_uci = None   # <--- add this
 
         # Best move from PRE (engine)
         try:
@@ -626,6 +627,16 @@ async def evaluate_move(
             played_material_gain_cp = material_gain_for_move(board_before, played_move_obj)
         except Exception as e:
             print("ERROR computing played_material_gain_cp:", e)
+
+
+        print("MATERIAL DEBUG:", {
+            # "fen": pre_fen,              # whatever your FEN variable is there
+            "side_before": side_before,
+            "best_move_uci": best_move_uci if pre and "pv" in pre[0] and pre[0]["pv"] else None,
+            "best_material_gain_cp": best_material_gain_cp,
+            "played_move_uci": move,
+            "played_material_gain_cp": played_material_gain_cp,
+        })
 
 
         # POST analysis (single PV)
@@ -697,7 +708,50 @@ async def evaluate_move(
             multipv_rank=multipv_rank,
         )
 
+
+                # 🔍 MASTER DEBUG BLOCK: all important eval-related variables
+        debug_payload = {
+            "fen_before": fen_before,
+            "move_uci": move,
+            "side_before": side_before,
+            "fullmove_number": fullmove_number,
+
+            # Engine evals (WHITE POV)
+            "eval_white_pre": eval_before_cp,
+            "eval_white_after": eval_after_cp,
+            "eval_white_played_from_pre": played_eval_from_pre,
+            "eval_white_best_from_pre": best_eval_from_pre,
+
+            # Mover POV
+            "mover_adv_before": mover_adv_before,
+            "mover_adv_after": mover_adv_after,
+            "mover_adv_delta": mover_adv_after - mover_adv_before,
+
+            # Multipv / CPL
+            "multipv_rank": multipv_rank,
+            "top_gap_cp": top_gap,
+            "cpl_cp": cpl,
+            "eval_change_cp": eval_change,
+
+            # Material info
+            "best_move_uci": best_move_uci,
+            "best_material_gain_cp": best_material_gain_cp,
+            "played_material_gain_cp": played_material_gain_cp,
+
+            # Stalemate-from-win miss flags
+            "was_clearly_winning_before": was_clearly_winning_before,
+            "is_drawish_after": is_drawish_after,
+            "stalemate_from_win_miss": stalemate_from_win_miss,
+
+            # Base label before exclam / Miss / Book
+            "basic_label": basic_label,
+        }
+        logger.info("CLASSIFY DEBUG: %s", debug_payload)
+        print("CLASSIFY DEBUG: %s", debug_payload)
+
         print("Basic label:", basic_label)
+
+        # print("Basic label:", basic_label)
 
         # --- Sacrifice detection (returns full SacrificeResult) ---
         uci_move_obj = chess.Move.from_uci(move)
@@ -717,16 +771,30 @@ async def evaluate_move(
             mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
 
 
+        # is_miss = detect_miss(
+        #     eval_pre_white=eval_before_cp,              # best-line eval from PRE
+        #     eval_after_white=eval_after_cp,            # eval after move
+        #     eval_played_pre_white=played_eval_from_pre,# your move's eval from PRE
+        #     eval_best_pre_white=best_eval_from_pre,    # best move eval from PRE
+        #     mover_color=side_before,
+        #     best_mate_in_plies=best_mate_in,
+        #     played_mate_in_plies=played_mate_in,
+        #     best_material_gain_cp=best_material_gain_cp,
+        #     played_material_gain_cp=played_material_gain_cp,
+        # )
+
         is_miss = detect_miss(
-            eval_pre_white=eval_before_cp,              # best-line eval from PRE
-            eval_after_white=eval_after_cp,            # eval after move
-            eval_played_pre_white=played_eval_from_pre,# your move's eval from PRE
-            eval_best_pre_white=best_eval_from_pre,    # best move eval from PRE
+            eval_pre_white=eval_before_cp,
+            eval_after_white=eval_after_cp,
+            eval_played_pre_white=played_eval_from_pre,
+            eval_best_pre_white=best_eval_from_pre,
             mover_color=side_before,
             best_mate_in_plies=best_mate_in,
             played_mate_in_plies=played_mate_in,
             best_material_gain_cp=best_material_gain_cp,
             played_material_gain_cp=played_material_gain_cp,
+            # board_before=board_before,           # NEW
+            # best_move_uci=best_move_uci,         # NEW
         )
 
 
@@ -808,16 +876,8 @@ async def evaluate_move(
             eval_best_pre_white=best_eval_from_pre,
             eval_played_pre_white=played_eval_from_pre,
             mover_color=side_before,
+            multipv_rank=multipv_rank,   # ← IMPORTANT
         )
-
-
-        print("GREAT DEBUG:", {
-            "is_great": great_info.is_great,
-            "reason": great_info.reason,
-            "mover_improvement_cp": great_info.mover_improvement_cp,
-            "cp_loss_for_mover_cp": great_info.cp_loss_for_mover_cp,
-            "delta_eval_white_cp": great_info.delta_eval_white_cp,
-        })
 
         # --- Mate-flip catastrophe detection (Blunder) ---
         # Use mover POV swing; threshold ~800cp like old ExclamParams
