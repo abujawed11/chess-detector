@@ -35,6 +35,8 @@ export default function PlayComputer() {
   const [isComputerThinking, setIsComputerThinking] = useState(false);
   const [gameResult, setGameResult] = useState(null); // null, 'win', 'loss', 'draw'
   const [gameResultMessage, setGameResultMessage] = useState('');
+  const [bestMove, setBestMove] = useState(null); // For hint arrow
+  const [hintRequested, setHintRequested] = useState(false);
 
   // Create a pre-normalized evaluation for display
   // Since EvaluationBar already normalizes based on FEN, we store as-is
@@ -238,6 +240,10 @@ export default function PlayComputer() {
   const handleMove = useCallback(async (move, newFen) => {
     if (!gameStarted || isComputerTurn() || gameResult) return;
 
+    // Clear hint when move is made
+    setBestMove(null);
+    setHintRequested(false);
+
     // Update game state
     try {
       game.load(newFen);
@@ -303,7 +309,79 @@ export default function PlayComputer() {
     setLastMove(null);
     setCurrentEval(null);
     setIsComputerThinking(false);
+    setBestMove(null);
+    setHintRequested(false);
   }, [game]);
+
+  // Request hint - shows best move arrow
+  const requestHint = useCallback(async () => {
+    if (!initialized || isComputerTurn() || gameResult) return;
+
+    setHintRequested(true);
+    try {
+      const result = await analyze(currentFen, { depth: difficulty.depth, multiPV: 1 });
+      if (result?.bestMove) {
+        setBestMove(result.bestMove);
+      }
+    } catch (err) {
+      console.error('Hint error:', err);
+    }
+  }, [initialized, isComputerTurn, gameResult, analyze, currentFen, difficulty.depth]);
+
+  // Copy FEN to clipboard
+  const copyFen = useCallback(() => {
+    navigator.clipboard.writeText(currentFen).then(() => {
+      alert('FEN copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy FEN:', err);
+    });
+  }, [currentFen]);
+
+  // Generate PGN from moves
+  const generatePGN = useCallback(() => {
+    const headers = [
+      '[Event "Play vs Computer"]',
+      '[Site "Chess Analyzer Pro"]',
+      `[Date "${new Date().toISOString().split('T')[0].replace(/-/g, '.')}"]`,
+      '[Round "1"]',
+      `[White "${playerColor === 'w' ? 'Player' : `Stockfish (${difficulty.elo})`}"]`,
+      `[Black "${playerColor === 'b' ? 'Player' : `Stockfish (${difficulty.elo})`}"]`,
+      `[Result "${gameResult === 'win' ? (playerColor === 'w' ? '1-0' : '0-1') :
+                  gameResult === 'loss' ? (playerColor === 'w' ? '0-1' : '1-0') :
+                  gameResult === 'draw' ? '1/2-1/2' : '*'}"]`,
+    ];
+
+    // Build move text
+    let moveText = '';
+    for (let i = 0; i < moves.length; i++) {
+      if (i % 2 === 0) {
+        moveText += `${Math.floor(i / 2) + 1}. `;
+      }
+      moveText += moves[i].san + ' ';
+    }
+
+    // Add result
+    const result = gameResult === 'win' ? (playerColor === 'w' ? '1-0' : '0-1') :
+                   gameResult === 'loss' ? (playerColor === 'w' ? '0-1' : '1-0') :
+                   gameResult === 'draw' ? '1/2-1/2' : '*';
+    moveText += result;
+
+    return headers.join('\n') + '\n\n' + moveText.trim();
+  }, [moves, playerColor, difficulty.elo, gameResult]);
+
+  // Download PGN file
+  const downloadPGN = useCallback(() => {
+    const pgn = generatePGN();
+    const blob = new Blob([pgn], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `game_vs_stockfish_${new Date().toISOString().split('T')[0]}.pgn`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [generatePGN]);
 
   // Navigate to move (for move history)
   const navigateToMove = useCallback((moveIndex) => {
@@ -501,6 +579,15 @@ export default function PlayComputer() {
           {!gameResult && (
             <>
               <button
+                onClick={requestHint}
+                disabled={!initialized || isComputerTurn() || hintRequested}
+                className={`rounded-lg px-4 py-2 font-bold text-white ${
+                  hintRequested ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
+                } disabled:bg-slate-400 disabled:cursor-not-allowed`}
+              >
+                {hintRequested ? '✓ Hint Shown' : '💡 Hint'}
+              </button>
+              <button
                 onClick={offerDraw}
                 className="rounded-lg bg-amber-600 px-4 py-2 font-bold text-white"
               >
@@ -514,6 +601,13 @@ export default function PlayComputer() {
               </button>
             </>
           )}
+
+          <button
+            onClick={copyFen}
+            className="rounded-lg bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700"
+          >
+            📋 Copy FEN
+          </button>
 
           <button
             onClick={newGame}
@@ -533,12 +627,20 @@ export default function PlayComputer() {
               : 'bg-amber-100 text-amber-700'
           }`}>
           {gameResultMessage}
-          <button
-            onClick={newGame}
-            className="ml-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-          >
-            Play Again
-          </button>
+          <div className="mt-3 flex justify-center gap-3">
+            <button
+              onClick={downloadPGN}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+            >
+              📥 Download PGN
+            </button>
+            <button
+              onClick={newGame}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+            >
+              Play Again
+            </button>
+          </div>
         </div>
       )}
 
@@ -564,6 +666,7 @@ export default function PlayComputer() {
                 onMove={canPlayerMove ? handleMove : undefined}
                 flipped={flipped}
                 lastMove={lastMove}
+                bestMove={bestMove}
               />
             </div>
 
