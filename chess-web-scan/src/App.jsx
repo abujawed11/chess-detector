@@ -11,6 +11,7 @@ import Home from './Home'
 import PGNAnalysis from './PGNAnalysis'
 import FENUpload from './FENUpload'
 import PlayComputer from './PlayComputer'
+import ThemeSelector from './components/ThemeSelector'
 import { API_BASE_URL } from './config/api'
 
 // Helper to get page from URL hash
@@ -193,7 +194,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -209,6 +211,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Position Analysis</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <Analysis initialFen={analysisFen} onEditPosition={handleOpenEditor} />
       </>
@@ -224,7 +229,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -240,6 +246,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Classification Test Suite</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <TestClassification />
       </>
@@ -255,7 +264,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -271,6 +281,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Stockfish 17.1 Analysis</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <StockfishAnalysis />
       </>
@@ -286,7 +299,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -302,6 +316,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Engine Thread Test</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <EngineTest />
       </>
@@ -317,7 +334,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -333,6 +351,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>PGN Game Analysis</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <PGNAnalysis />
       </>
@@ -358,7 +379,8 @@ export default function App(){
           background: '#1f2937',
           display: 'flex',
           gap: 16,
-          marginBottom: 0
+          marginBottom: 0,
+          alignItems: 'center'
         }}>
           <button
             onClick={() => setCurrentPage('home')}
@@ -374,6 +396,9 @@ export default function App(){
             ← Back to Home
           </button>
           <span style={{ color: '#9ca3af', alignSelf: 'center' }}>Play vs Computer</span>
+          <div style={{ marginLeft: 'auto' }}>
+            <ThemeSelector />
+          </div>
         </nav>
         <PlayComputer />
       </>
@@ -388,7 +413,8 @@ export default function App(){
         background: '#1f2937',
         display: 'flex',
         gap: 16,
-        marginBottom: 0
+        marginBottom: 0,
+        alignItems: 'center'
       }}>
         <button
           onClick={() => setCurrentPage('home')}
@@ -404,7 +430,8 @@ export default function App(){
           ← Back to Home
         </button>
         <h3 style={{ color: 'white', margin: 0 }}>Chess Image Scanner</h3>
-         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+           <ThemeSelector />
            <button
              onClick={() => setCurrentPage('scanner')}
              style={{

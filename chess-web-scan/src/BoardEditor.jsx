@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Chess } from "chess.js/dist/esm/chess.js";
 import { getPieceImageUrl } from "./utils/chessUtils";
 import { FILES, RANKS } from "./utils/constants";
+import { useTheme } from "./context/ThemeContext";
 
 // --- piece palette ---
 const WHITE = ["K", "Q", "R", "B", "N", "P"];
@@ -260,6 +261,9 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
   const [flipped, setFlipped] = useState(false);
   const [coordinatesFlipped, setCoordinatesFlipped] = useState(false);
 
+  // Get theme colors from context
+  const { boardColors, pieceSet } = useTheme();
+
   const [dragPiece, setDragPiece] = useState(null);
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOverSquare, setDragOverSquare] = useState(null);
@@ -385,7 +389,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
 
     // Create better drag image
     const img = new Image();
-    img.src = getPieceImageUrl(p);
+    img.src = getPieceImageUrl(p, pieceSet.id);
     img.onload = () => {
       e.dataTransfer.setDragImage(img, 45, 45);
     };
@@ -399,7 +403,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     e.dataTransfer.setData('text/plain', JSON.stringify({ piece, from: '_PALETTE_' }));
 
     const img = new Image();
-    img.src = getPieceImageUrl(piece);
+    img.src = getPieceImageUrl(piece, pieceSet.id);
     img.onload = () => {
       e.dataTransfer.setDragImage(img, 45, 45);
     };
@@ -697,6 +701,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                   items={WHITE}
                   onDragStart={onDragStartFromPalette}
                   color="white"
+                  pieceTheme={pieceSet.id}
                 />
               </div>
 
@@ -733,7 +738,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                   const file = sq.charCodeAt(0) - 97;
                   const rankIdx = 8 - parseInt(sq[1],10);
                   const isLight = (file + rankIdx) % 2 === 0;
-                  const bg = isLight ? '#f0d9b5' : '#b58863';
+                  const bg = isLight ? boardColors.light : boardColors.dark;
                   const piece = pieces[sq];
                   const isDragOver = dragOverSquare === sq;
                   const isDragging = dragFrom === sq;
@@ -765,7 +770,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                           top: 4,
                           fontSize: 10,
                           fontWeight: 700,
-                          color: isLight ? '#b58863' : '#f0d9b5',
+                          color: isLight ? boardColors.dark : boardColors.light,
                           opacity: 0.7,
                           userSelect: 'none'
                         }}>
@@ -779,7 +784,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                           bottom: 4,
                           fontSize: 10,
                           fontWeight: 700,
-                          color: isLight ? '#b58863' : '#f0d9b5',
+                          color: isLight ? boardColors.dark : boardColors.light,
                           opacity: 0.7,
                           userSelect: 'none'
                         }}>
@@ -793,7 +798,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                           draggable
                           onDragStart={(e) => onDragStartFromSquare(e, sq)}
                           onDragEnd={onDragEnd}
-                          src={getPieceImageUrl(piece)}
+                          src={getPieceImageUrl(piece, pieceSet.id)}
                           alt={piece}
                           style={{
                             width: '100%',
@@ -842,6 +847,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                   items={BLACK}
                   onDragStart={onDragStartFromPalette}
                   color="black"
+                  pieceTheme={pieceSet.id}
                 />
               </div>
             </div>
@@ -1170,7 +1176,7 @@ function ToolbarBtn({ children, disabled, onClick, style }) {
   );
 }
 
-function PieceStrip({ title, items, onDragStart, color }) {
+function PieceStrip({ title, items, onDragStart, color, pieceTheme }) {
   return (
     <div style={{
       display: 'flex',
@@ -1218,7 +1224,7 @@ function PieceStrip({ title, items, onDragStart, color }) {
         >
           <img
             alt={p}
-            src={getPieceImageUrl(p)}
+            src={getPieceImageUrl(p, pieceTheme)}
             style={{
               width: 52,
               height: 52,

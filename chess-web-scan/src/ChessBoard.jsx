@@ -1,11 +1,7 @@
 import { useMemo } from 'react'
 import './ChessBoard.css'
-
-// Mapping FEN characters to piece names
-const PIECE_NAMES = {
-  'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
-  'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
-}
+import { useTheme } from './context/ThemeContext'
+import { getPieceImageUrl } from './utils/chessUtils'
 
 function fenToArray(fen) {
   const [placement] = fen.split(' ')
@@ -27,29 +23,43 @@ export default function ChessBoard({ fen }) {
   const arr = useMemo(() => fen ? fenToArray(fen) : Array(64).fill(''), [fen])
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
   const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
-  
+
+  const { boardColors, pieceSet } = useTheme()
+
   const cells = []
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const idx = r * 8 + f
-      const dark = (r + f) % 2 === 1
+      const isLight = (r + f) % 2 === 0
       const piece = arr[idx]
       const coord = files[f] + ranks[r]
-      
+
       cells.push(
-        <div 
-          className={`chess-square ${dark ? 'dark' : 'light'}`} 
-          key={idx} 
+        <div
+          className="chess-square"
+          style={{
+            background: isLight ? boardColors.light : boardColors.dark
+          }}
+          key={idx}
           title={coord}
         >
           {piece && (
-            <div className={`chess-piece ${PIECE_NAMES[piece]}`}></div>
+            <img
+              src={getPieceImageUrl(piece, pieceSet.id)}
+              alt={piece}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                padding: '8%'
+              }}
+            />
           )}
         </div>
       )
     }
   }
-  
+
   return (
     <div className="chess-board-wrapper">
       <div className="chess-board">

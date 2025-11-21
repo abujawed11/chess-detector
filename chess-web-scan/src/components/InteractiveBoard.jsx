@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { getPieceImageUrl } from '../utils/chessUtils';
+import { useTheme } from '../context/ThemeContext';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
@@ -23,6 +24,9 @@ export default function InteractiveBoard({
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
   const [promotionDialog, setPromotionDialog] = useState(null); // { from, to }
+
+  // Get theme colors from context
+  const { boardColors, pieceSet } = useTheme();
 
   // Update chess position when FEN changes
   if (chess.fen() !== fen) {
@@ -120,11 +124,11 @@ export default function InteractiveBoard({
     setDragFrom(square);
 
     const img = new Image();
-    img.src = getPieceImageUrl(piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase());
+    img.src = getPieceImageUrl(piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase(), pieceSet.id);
     img.onload = () => {
       e.dataTransfer.setDragImage(img, 40, 40);
     };
-  }, [chess, getPieceAt]);
+  }, [chess, getPieceAt, pieceSet.id]);
 
   const handleDragOver = useCallback((e, square) => {
     e.preventDefault();
@@ -213,16 +217,16 @@ export default function InteractiveBoard({
           style={{
             position: 'relative',
             background: isSelected
-              ? '#baca44'
+              ? boardColors.selected
               : isLastMoveSquare
-              ? (isLight ? '#cdd26a' : '#aaa23a')
+              ? (isLight ? boardColors.lastMoveLight : boardColors.lastMoveDark)
               : isHighlighted
-              ? '#aaa23a'
+              ? boardColors.highlight
               : isHovered && dragFrom
-              ? '#cdd26a'
+              ? boardColors.hover
               : isLight
-              ? '#f0d9b5'
-              : '#b58863',
+              ? boardColors.light
+              : boardColors.dark,
             cursor: piece && piece.color === chess.turn() ? 'pointer' : 'default',
             opacity: isDragging ? 0.5 : 1,
             transition: 'background 0.2s'
@@ -236,7 +240,7 @@ export default function InteractiveBoard({
               top: 4,
               fontSize: 10,
               fontWeight: 700,
-              color: isLight ? '#b58863' : '#f0d9b5',
+              color: isLight ? boardColors.dark : boardColors.light,
               userSelect: 'none'
             }}>
               {rank}
@@ -249,7 +253,7 @@ export default function InteractiveBoard({
               bottom: 4,
               fontSize: 10,
               fontWeight: 700,
-              color: isLight ? '#b58863' : '#f0d9b5',
+              color: isLight ? boardColors.dark : boardColors.light,
               userSelect: 'none'
             }}>
               {file}
@@ -296,7 +300,7 @@ export default function InteractiveBoard({
               draggable
               onDragStart={(e) => handleDragStart(e, square)}
               onDragEnd={handleDragEnd}
-              src={getPieceImageUrl(piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase())}
+              src={getPieceImageUrl(piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase(), pieceSet.id)}
               alt={piece.type}
               style={{
                 width: '100%',
@@ -758,7 +762,7 @@ export default function InteractiveBoard({
                     }}
                   >
                     <img
-                      src={getPieceImageUrl(pieceType)}
+                      src={getPieceImageUrl(pieceType, pieceSet.id)}
                       alt={piece}
                       style={{
                         width: '90%',

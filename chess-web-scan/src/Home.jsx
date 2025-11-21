@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ThemeSelector from './components/ThemeSelector';
 
 /**
  * Home / Landing Page
@@ -124,13 +125,14 @@ export default function Home({ onNavigate }) {
         </div>
 
         {/* Header */}
-        <div className="relative z-10 mx-auto max-w-7xl px-6 py-8">
+        <div className="relative z-20 mx-auto max-w-7xl px-6 py-8">
           <nav className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="text-4xl">♟️</div>
               <h1 className="text-2xl font-bold text-white">Chess Analyzer Pro</h1>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
+              <ThemeSelector />
               <a
                 href="https://github.com"
                 target="_blank"
@@ -179,7 +181,7 @@ export default function Home({ onNavigate }) {
       </div>
 
       {/* Features Grid */}
-      <div className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="relative mx-auto max-w-7xl px-6 py-20">
         <div className="mb-12 text-center">
           <h3 className="text-3xl font-bold text-white">Choose Your Tool</h3>
           <p className="mt-2 text-slate-400">Everything you need for chess analysis and improvement</p>
@@ -232,7 +234,7 @@ export default function Home({ onNavigate }) {
       )}
 
       {/* Features highlight */}
-      <div className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="relative mx-auto max-w-7xl px-6 py-20">
         <div className="grid gap-12 md:grid-cols-3">
           <div className="text-center">
             <div className="mb-4 text-5xl">⚡</div>
@@ -253,7 +255,7 @@ export default function Home({ onNavigate }) {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10 py-8">
+      <footer className="relative border-t border-white/10 py-8">
         <div className="mx-auto max-w-7xl px-6 text-center text-sm text-slate-400">
           <p>Built with ♟️ Chess.js, Stockfish 17.1, and React</p>
           <p className="mt-2">© 2025 Chess Analyzer Pro. All rights reserved.</p>
