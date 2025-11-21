@@ -2,6 +2,7 @@ import base64
 import os
 import sys
 import time
+import asyncio
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form
@@ -82,6 +83,9 @@ DETECTOR = Detector(
 
 # Global persistent Stockfish engine
 persistent_engine = None
+
+# Lock to serialize engine access and prevent race conditions during batch analysis
+engine_lock = asyncio.Lock()
 
 @app.get("/health")
 def health():
@@ -525,15 +529,18 @@ def analyze_or_fail(fen: str, depth: int, multipv: int, engine):
         (max(6, depth - 6), 1),
     ]
     last_err = None
-    for d, k in tries:
+    for i, (d, k) in enumerate(tries):
         try:
             if engine is not None:
                 pvs = analyze_fen_multipv_persistent(fen, engine, depth=d, multipv=k)
             else:
                 pvs = analyze_fen_multipv(fen, depth=d, multipv=k)
             if pvs:
+                if i > 0:
+                    logger.warning(f"⚠️ FALLBACK: Used depth={d} instead of {depth} for FEN: {fen[:40]}...")
                 return pvs
         except Exception as e:
+            logger.warning(f"Engine attempt {i+1} failed (depth={d}): {e}")
             last_err = e
     raise RuntimeError(f"No PVs returned for fen='{fen[:60]}...'. Last error: {last_err}")
 
@@ -631,8 +638,9 @@ async def evaluate_move(
         side_before = "w" if board_before.turn == chess.WHITE else "b"
         fullmove_number = board_before.fullmove_number
 
-        # PRE analysis (multi-PV)
-        pre = analyze_or_fail(fen_before, depth, multipv, persistent_engine)
+        # PRE analysis (multi-PV) - use lock to serialize engine access
+        async with engine_lock:
+            pre = analyze_or_fail(fen_before, depth, multipv, persistent_engine)
         pre_score = pre[0]["score"]
         eval_before_cp = eval_for_white(pre_score, side_before)
 
@@ -691,7 +699,9 @@ async def evaluate_move(
             post_score = {"type": "cp", "value": 0}
             logger.info(f"Position after move is GAME OVER (draw)")
         else:
-            post = analyze_or_fail(post_fen, depth, 1, persistent_engine)
+            # POST analysis - use lock to serialize engine access
+            async with engine_lock:
+                post = analyze_or_fail(post_fen, depth, 1, persistent_engine)
             post_score = post[0]["score"]
 
         side_after = "w" if board_after.turn == chess.WHITE else "b"
