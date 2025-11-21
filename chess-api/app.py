@@ -437,6 +437,42 @@ def eval_for_white(score: dict, side_to_move: str) -> int:
         return int(v)
     except Exception:
         return 0
+    
+
+
+# ============================================================
+# ENGINE EVAL HELPER FOR SACRIFICE ACCEPT-LINE ANALYSIS
+# ============================================================
+def eval_board_white_cp(board: chess.Board) -> float:
+    """
+    Evaluate a board using your persistent (or temporary) Stockfish,
+    returning a WHITE-POV centipawn score.
+
+    - board: a chess.Board object AFTER some accepting capture
+    - returns: eval for White (positive if White is better)
+    """
+    global persistent_engine
+
+    fen = board.fen()
+    
+    # Use persistent engine if running
+    try:
+        if persistent_engine is not None:
+            pvs = analyze_fen_multipv_persistent(fen, persistent_engine, depth=12, multipv=1)
+        else:
+            pvs = analyze_fen_multipv(fen, depth=12, multipv=1)
+    except Exception:
+        # Fallback to temporary engine on any issue
+        pvs = analyze_fen_multipv(fen, depth=12, multipv=1)
+
+    if not pvs:
+        return 0
+
+    score = pvs[0].get("score", {"type": "cp", "value": 0})
+    side_to_move = "w" if board.turn == chess.WHITE else "b"
+
+    return eval_for_white(score, side_to_move)
+
 
 
 def played_rank_and_gap(uci_move, pvs, side_to_move: str):
@@ -755,7 +791,7 @@ async def evaluate_move(
 
         # --- Sacrifice detection (returns full SacrificeResult) ---
         uci_move_obj = chess.Move.from_uci(move)
-        sac_result = detect_sacrifice(board_before, uci_move_obj)
+        sac_result = detect_sacrifice(board_before, uci_move_obj, eval_func=eval_board_white_cp)
         is_sacrifice = sac_result.is_real_sacrifice
 
         # --- Mate metadata ---

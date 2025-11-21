@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 import chess
 
 # ------------------------------------------------------------
@@ -80,6 +80,7 @@ def detect_sacrifice(
     board: chess.Board,
     move: chess.Move,
     params: Optional[SacrificeParams] = None,
+    eval_func: Optional[Callable[[chess.Board], float]] = None,  # NEW
 ) -> SacrificeResult:
     """
     Detect whether `move` is a material sacrifice using local exchange logic.
@@ -177,11 +178,43 @@ def detect_sacrifice(
         )
 
     # All legal captures that take our just-moved piece on target_sq.
+    # accepting_moves = [
+    #     mv for mv in b1.legal_moves
+    #     if b1.is_capture(mv) and mv.to_square == target_sq
+    # ]
+    # had_accepting_capture = len(accepting_moves) > 0
+
+    # for accept in accepting_moves:
+    #     attacker_piece = b1.piece_at(accept.from_square)
+    #     if attacker_piece is None:
+    #         continue
+
+    #     # Optional: don't count suicidal king captures if square is defended
+    #     if attacker_piece.piece_type == chess.KING and num_attackers_mover > 0:
+    #         continue
+
+    #     attacker_val = PIECE_VALUES.get(attacker_piece.piece_type, 0)
+    #     has_defender = num_attackers_mover > 0
+
+    #     if not has_defender:
+    #         # If we can't recapture at all, we just lose the face-value risk.
+    #         net_loss = risk_face_cp
+    #     else:
+    #         # They take our piece (risk_face_cp), then we recapture their attacker.
+    #         net_loss = risk_face_cp - attacker_val
+
+    #     if net_loss > worst_net_loss:
+    #         worst_net_loss = net_loss
+
+        # All legal captures that take our just-moved piece on target_sq.
     accepting_moves = [
         mv for mv in b1.legal_moves
         if b1.is_capture(mv) and mv.to_square == target_sq
     ]
     had_accepting_capture = len(accepting_moves) > 0
+
+    # NEW: track best (i.e. worst for us) eval after acceptance, mover POV
+    best_after_accept_pov = float('+inf')  # we want min over all accepts
 
     for accept in accepting_moves:
         attacker_piece = b1.piece_at(accept.from_square)
@@ -204,6 +237,40 @@ def detect_sacrifice(
 
         if net_loss > worst_net_loss:
             worst_net_loss = net_loss
+
+        # ------------ NEW PART: engine eval of accept line ------------
+        if eval_func is not None:
+            b2 = b1.copy(stack=False)
+            b2.push(accept)
+            # eval from White POV
+            eval_accept_white = eval_func(b2)
+            # convert to mover POV
+            after_accept_pov = cp_for_player(eval_accept_white, mover_color)
+
+            # opponent chooses the capture that minimizes our eval
+            if after_accept_pov < best_after_accept_pov:
+                best_after_accept_pov = after_accept_pov
+        # ------------ END NEW PART ------------
+
+
+        # If we had an eval_func, and even the BEST accepting capture
+    # still leaves the mover at least roughly OK (>= -50cp),
+    # then this is NOT a real sacrifice – it's a tactical trick.
+    if eval_func is not None and best_after_accept_pov != float('+inf'):
+        # threshold can be tuned; -50cp means "not clearly worse"
+        if best_after_accept_pov >= -50:
+            print("SAC DEBUG: Accepting never gives opponent real advantage -> not a sacrifice")
+            return SacrificeResult(
+                is_real_sacrifice=False,
+                is_big_sacrifice=False,
+                worst_net_loss_cp=0,
+                had_accepting_capture=had_accepting_capture,
+                offered_piece_cp=offered_piece_cp,
+                num_attackers_opponent=num_attackers_opponent,
+                num_attackers_mover=num_attackers_mover,
+            )
+
+
 
     # Use the two thresholds you specified
     is_real_sacrifice = had_accepting_capture and \
