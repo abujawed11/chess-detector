@@ -398,6 +398,93 @@ PIECE_VALUES = {
     chess.KING: 0,
 }
 
+
+# --- Helpers for material balance along a PV ---
+
+def material_for_color_app(board: chess.Board, color: chess.Color) -> int:
+    """
+    Simple material count for a given side, using PIECE_VALUES above.
+    """
+    total = 0
+    for piece in board.piece_map().values():
+        if piece.color == color:
+            total += PIECE_VALUES.get(piece.piece_type, 0)
+    return total
+
+
+def material_balance_for_side(board: chess.Board, side_char: str) -> int:
+    """
+    Return (our_material - their_material) in centipawns for the side 'w' or 'b'.
+    """
+    color = chess.WHITE if side_char == "w" else chess.BLACK
+    us   = material_for_color_app(board, color)
+    them = material_for_color_app(board, not color)
+    return us - them
+
+
+def compute_best_line_material_gain_cp(
+    board_before: chess.Board,
+    pvs: list,
+    side_before: str,
+    max_plies: int = 4,
+) -> int | None:
+    """
+    Look at the engine's *first* PV from the PRE analysis, play the first
+    `max_plies` moves on a copy of `board_before`, and see how much the
+    material balance (for the mover) improves.
+
+    Returns:
+        best_line_material_gain_cp (int) or None if no PV / moves.
+    """
+    if not pvs:
+        return None
+
+    first_pv_entry = pvs[0]
+    pv_moves = first_pv_entry.get("pv", [])
+    if not pv_moves:
+        return None
+
+    # Clamp how many plies we actually simulate
+    max_plies = min(max_plies, len(pv_moves))
+
+    # Material balance before following the PV
+    start_balance = material_balance_for_side(board_before, side_before)
+
+    # Play the PV moves on a copy
+    temp_board = board_before.copy(stack=False)
+    plies_played = 0
+
+    for uci in pv_moves:
+        if plies_played >= max_plies:
+            break
+        try:
+            mv = chess.Move.from_uci(uci)
+        except Exception:
+            break
+
+        if mv not in temp_board.legal_moves:
+            break
+
+        temp_board.push(mv)
+        plies_played += 1
+
+    end_balance = material_balance_for_side(temp_board, side_before)
+    gain_cp = end_balance - start_balance
+
+    logger.info("BEST_LINE_MATERIAL_GAIN_DEBUG: %s", {
+        "side_before": side_before,
+        "pv_prefix": pv_moves[:max_plies],
+        "plies_played": plies_played,
+        "start_balance_cp": start_balance,
+        "end_balance_cp": end_balance,
+        "best_line_material_gain_cp": gain_cp,
+    })
+
+    return gain_cp
+
+
+
+
 MATE_CP   = 32000
 MATE_STEP = 1000
 
@@ -683,6 +770,19 @@ async def evaluate_move(
         })
 
 
+
+        # --- NEW: multi-move PV material gain for the best line ---
+        best_line_material_gain_cp = compute_best_line_material_gain_cp(
+            board_before=board_before,
+            pvs=pre,
+            side_before=side_before,
+            max_plies=4,   # you can tune: 4 plies = 2 moves total
+        )
+
+        print("BEST_LINE_MATERIAL_GAIN_CP:", best_line_material_gain_cp)
+
+
+
         # POST analysis (single PV)
         board_after = board_before.copy()
         board_after.push_uci(move)
@@ -829,7 +929,26 @@ async def evaluate_move(
         #     played_material_gain_cp=played_material_gain_cp,
         # )
 
-        is_miss = detect_miss(
+        # is_miss = detect_miss(
+        #     eval_pre_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_played_pre_white=played_eval_from_pre,
+        #     eval_best_pre_white=best_eval_from_pre,
+        #     mover_color=side_before,
+        #     best_mate_in_plies=best_mate_in,
+        #     played_mate_in_plies=played_mate_in,
+        #     best_material_gain_cp=best_material_gain_cp,
+        #     played_material_gain_cp=played_material_gain_cp,
+        #     board=board_before,
+        #     move=uci_move_obj,
+        # )
+
+
+
+        # print("Miss detected:", is_miss)
+
+            # --- Advanced Miss detection (returns MissResult) ---
+        miss_result = detect_miss(
             eval_pre_white=eval_before_cp,
             eval_after_white=eval_after_cp,
             eval_played_pre_white=played_eval_from_pre,
@@ -839,13 +958,18 @@ async def evaluate_move(
             played_mate_in_plies=played_mate_in,
             best_material_gain_cp=best_material_gain_cp,
             played_material_gain_cp=played_material_gain_cp,
-            board=board_before,
+            best_line_material_gain_cp=best_line_material_gain_cp,
+
+            board_before=board_before,
             move=uci_move_obj,
+            best_move_uci=best_move_uci,
         )
 
+        is_miss = miss_result.is_miss
+        miss_reason = miss_result.reason
 
+        print("Miss detected:", is_miss, "reason:", miss_reason)
 
-        print("Miss detected:", is_miss)
 
 
         # opp_sac_result = detect_sacrifice(board_before, uci_move_obj)

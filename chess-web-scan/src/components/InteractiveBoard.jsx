@@ -172,6 +172,10 @@ export default function InteractiveBoard({
   }, []);
 
   // Convert square notation to pixel coordinates
+  // Board dimensions - container is 680px with 12px padding, so grid is 656px
+  const BOARD_PADDING = 12;
+  const GRID_SIZE = 680 - (BOARD_PADDING * 2); // 656px
+
   const squareToCoords = useCallback((square) => {
     const file = square[0];
     const rank = parseInt(square[1]);
@@ -182,7 +186,7 @@ export default function InteractiveBoard({
     const fileIdx = displayFiles.indexOf(file);
     const rankIdx = displayRanks.indexOf(rank);
 
-    const squareSize = 680 / 8; // Board is 680x680 (increased from 560)
+    const squareSize = GRID_SIZE / 8; // 82px per square
     const x = fileIdx * squareSize + squareSize / 2;
     const y = rankIdx * squareSize + squareSize / 2;
 
@@ -367,8 +371,8 @@ export default function InteractiveBoard({
           position: 'absolute',
           top: 0,
           left: 0,
-          width: 680,
-          height: 680,
+          width: GRID_SIZE,
+          height: GRID_SIZE,
           pointerEvents: 'none',
           zIndex: 9
         }}
@@ -485,8 +489,8 @@ export default function InteractiveBoard({
           position: 'absolute',
           top: 0,
           left: 0,
-          width: 680,
-          height: 680,
+          width: GRID_SIZE,
+          height: GRID_SIZE,
           pointerEvents: 'none',
           zIndex: 10
         }}
@@ -611,7 +615,7 @@ export default function InteractiveBoard({
 
     const displayFiles = flipped ? [...FILES].reverse() : FILES;
     const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
-    const squareSize = 680 / 8; // Updated to match new board size
+    const squareSize = GRID_SIZE / 8; // 82px per square
 
     return tacticalMotifs.map((motif, idx) => {
       const file = motif.square[0];
