@@ -1040,14 +1040,34 @@ async def evaluate_move(
 
         # --- NEW Great move detection (non-sacrifice, big delta_eval, no CP loss) ---
 
+        # great_info = detect_great_move(
+        #     eval_before_white=eval_before_cp,
+        #     eval_after_white=eval_after_cp,
+        #     eval_best_pre_white=best_eval_from_pre,
+        #     eval_played_pre_white=played_eval_from_pre,
+        #     mover_color=side_before,
+        #     multipv_rank=multipv_rank,   # ← IMPORTANT
+        #     best_move_uci=best_move["uci"]
+        #     best_line_material_gain_cp=best_line_gain
+        #     move=actual_move
+        #     board_before=board_before
+
+        # )
+
         great_info = detect_great_move(
             eval_before_white=eval_before_cp,
             eval_after_white=eval_after_cp,
             eval_best_pre_white=best_eval_from_pre,
             eval_played_pre_white=played_eval_from_pre,
             mover_color=side_before,
-            multipv_rank=multipv_rank,   # ← IMPORTANT
+            multipv_rank=multipv_rank,
+            best_move_uci=best_move_uci,
+            best_line_material_gain_cp=best_line_material_gain_cp,
+            played_material_gain_cp=played_material_gain_cp,  # pass into new param
+            move=uci_move_obj,
+            board_before=board_before,
         )
+
 
         # --- Mate-flip catastrophe detection (Blunder) ---
         # Use mover POV swing; threshold ~800cp like old ExclamParams

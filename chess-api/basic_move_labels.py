@@ -1679,39 +1679,7 @@ def detect_sac_brilliancy(
 
 @dataclass
 class GreatMoveParams:
-    """
-    Tunables for 'Great' (!) moves (non-sac, non-book).
 
-    We use mover-POV eval (via cp_for_player) and game states (via situation_from_cp)
-    to define four Great patterns:
-
-    Type 1: Perfect Conversion Great
-        - cp_loss == 0 (within perfect_cp_loss_cp)
-        - multipv_rank == 1
-        - before_state < after_state  (state strictly improves)
-
-    Type 2: Near-perfect Conversion Great
-        - cp_loss <= near_cp_loss_cp
-        - multipv_rank <= near_max_multipv_rank
-        - before_state < after_state
-        - mover_delta >= near_min_improvement_cp
-
-    Type 3: Big Defensive Great (rescue from bad)
-        - cp_loss == 0
-        - multipv_rank == 1
-        - before_state in {Worse, Lost}
-        - (after_state in {Equalish, Winning, Won}
-           OR (after_state == "Worse" and mover_delta >= defense_min_improvement_cp))
-
-    Type 4: Intra-bucket Equalish Great
-        - cp_loss == 0
-        - multipv_rank == 1
-        - before_state == after_state == "Equalish"
-        - mover_delta >= intrabucket_equalish_min_improvement_cp
-
-    We also ignore positions where eval is already huge (mate-ish) using
-    max_abs_eval_for_great on mover-POV eval before/after.
-    """
     # "Perfect" CP loss threshold (0 means exactly best)
     perfect_cp_loss_cp: int = 0
 
@@ -1748,48 +1716,58 @@ class GreatMoveResult:
     after_state: str = ""
     pattern: Optional[str] = None  # "conversion_perfect", "conversion_near", "defense", "intrabucket_equalish"
 
-
 def detect_great_move(
     *,
-    eval_before_white: float,                 # BEFORE move, White POV
-    eval_after_white: float,                  # AFTER move, White POV
-    eval_best_pre_white: Optional[float],     # best move eval from PRE, White POV
-    eval_played_pre_white: Optional[float],   # played move eval from PRE, White POV
-    mover_color: str,                         # 'w' or 'b'
-    multipv_rank: Optional[int],              # PV rank for played move (1 = best)
+    eval_before_white: float,
+    eval_after_white: float,
+    eval_best_pre_white: Optional[float],
+    eval_played_pre_white: Optional[float],
+    mover_color: str,
+    multipv_rank: Optional[int],
+
+    # PV-based fields
+    best_move_uci: Optional[str] = None,
+    best_line_material_gain_cp: Optional[int] = None,
+    played_material_gain_cp: Optional[int] = None,
+    move: Optional[chess.Move] = None,
+    board_before: Optional[chess.Board] = None,
+
     params: Optional[GreatMoveParams] = None,
 ) -> GreatMoveResult:
     """
-    'Great' move definition (non-sac, non-book – filtered outside):
+    PURE PV-CENTRIC 'Great' (!) move detector.
 
-    Uses four patterns (see GreatMoveParams docstring). All work in mover POV.
+    - No CPL buckets (Best/Good/Inaccuracy/etc. handled elsewhere).
+    - No CP-loss-vs-best patterns (perfect/near-perfect conversion).
+    - We only use eval/CP as *gates* to check that the PV tactic
+      actually changes the game (big eval jump, rescue from bad, etc.).
+
+    Patterns:
+
+      1) pv_tactical_win  (PV starter, big winning tactic)
+      2) pv_defense       (PV starter, only defensive resource)
+      3) pv_alternative   (Different move, same big tactical win)
     """
     if params is None:
         params = GreatMoveParams()
 
-    # Need both best and played PRE evals to measure CP loss vs best
-    if eval_best_pre_white is None or eval_played_pre_white is None:
-        return GreatMoveResult(
-            is_great=False,
-            reason="missing_best_or_played_pre_eval",
-            mover_improvement_cp=0.0,
-            cp_loss_for_mover_cp=None,
-            delta_eval_white_cp=0.0,
-        )
-
-    # --- 1) Convert to mover POV and derive states ---
+    # -------------------------------------------------------
+    # 1) Basic POV + states (computed ONCE)
+    # -------------------------------------------------------
     mover_before = cp_for_player(eval_before_white, mover_color)
     mover_after  = cp_for_player(eval_after_white,  mover_color)
-    mover_delta  = mover_after - mover_before       # >0 = good for mover
+    mover_delta  = mover_after - mover_before          # >0 = good for mover
 
-    before_state = situation_from_cp(mover_before)  # "Won"/"Winning"/"Equalish"/"Worse"/"Lost"
+    before_state = situation_from_cp(mover_before)     # "Won"/"Winning"/"Equalish"/"Worse"/"Lost"
     after_state  = situation_from_cp(mover_after)
 
-    # raw white-centric delta (for logging only)
     delta_eval_white = eval_after_white - eval_before_white
 
-    # Ignore positions that are already completely decided
-    if abs(mover_before) >= params.max_abs_eval_for_great or abs(mover_after) >= params.max_abs_eval_for_great:
+    # Ignore positions that are already completely decided (mate-ish)
+    if (
+        abs(mover_before) >= params.max_abs_eval_for_great or
+        abs(mover_after)  >= params.max_abs_eval_for_great
+    ):
         return GreatMoveResult(
             is_great=False,
             reason="eval_too_large_matelike",
@@ -1798,153 +1776,135 @@ def detect_great_move(
             delta_eval_white_cp=delta_eval_white,
             before_state=before_state,
             after_state=after_state,
+            pattern=None,
         )
 
-    # --- 2) CP loss vs engine-best from PRE (mover POV) ---
-    if mover_color == "w":
-        # More positive is better for White. If best_eval_pre > played_eval_pre,
-        # we lost something vs best.
-        cp_loss_for_mover = eval_best_pre_white - eval_played_pre_white
-    else:
-        # For Black, more negative is better. If played_eval_pre > best_eval_pre,
-        # we lost something vs best.
-        cp_loss_for_mover = eval_played_pre_white - eval_best_pre_white
-
-    # Normalize multipv: if None, treat as best (1)
+    # We still keep multipv rank normalized (can be used later if needed)
     norm_mpv = multipv_rank if multipv_rank is not None else 1
 
-    # --- 3) Helper: state improvement check ---
-    STATE_ORDER = ["Lost", "Worse", "Equalish", "Winning", "Won"]
-    STATE_RANK = {s: i for i, s in enumerate(STATE_ORDER)}
-
-    def state_rank(s: str) -> int:
-        return STATE_RANK.get(s, 2)  # default to "Equalish" rank if unknown
-
-    state_improves = state_rank(after_state) > state_rank(before_state)
-
-    # Convenience flags
-    perfect_loss = cp_loss_for_mover <= params.perfect_cp_loss_cp
-    near_loss    = cp_loss_for_mover <= params.near_cp_loss_cp
-
-    # --- 4) Type 1: Perfect Conversion Great ---
-    type1_conversion_perfect = (
-        perfect_loss and
-        norm_mpv == 1 and
-        state_improves and
-        mover_delta >= 80
-    )
-
-    # --- 5) Type 2: Near-perfect Conversion Great ---
-    type2_conversion_near = (
-        near_loss and
-        norm_mpv <= params.near_max_multipv_rank and
-        state_improves and
-        mover_delta >= params.near_min_improvement_cp
-    )
-
-    # --- 6) Type 3: Big Defensive Great (rescue from bad) ---
-    is_bad_before = before_state in ("Worse", "Lost")
-    is_better_after = after_state in ("Equalish", "Winning", "Won")
-
-    # type3_defense = (
-    #     perfect_loss and
-    #     norm_mpv == 1 and
-    #     is_bad_before and
-    #     (
-    #         is_better_after or
-    #         (after_state == "Worse" and mover_delta >= params.defense_min_improvement_cp)
-    #     )
-    # )
-    type3_defense = (
-        perfect_loss and
-        norm_mpv == 1 and
-        is_bad_before and
-        (
-            # Case A: state actually improves (Lost/Worse → Equalish/Winning/Won),
-            # but only count it as Great if the CP jump is reasonably big.
-            (is_better_after and mover_delta >= params.defense_state_min_improvement_cp)
-            or
-            # Case B: we stay in "Worse" but improve a LOT inside that bucket.
-            (after_state == "Worse" and mover_delta >= params.defense_min_improvement_cp)
-        )
-    )
-
-    # --- 7) Type 4: Intra-bucket Equalish Great ---
-    type4_intrabucket_equalish = (
-        perfect_loss and
-        norm_mpv == 1 and
-        before_state == "Equalish" and
-        after_state == "Equalish" and
-        mover_delta >= params.intrabucket_equalish_min_improvement_cp
-    )
-
-    # --- 8) Aggregate decision ---
-    is_great = (
-        type1_conversion_perfect or
-        type2_conversion_near or
-        type3_defense or
-        type4_intrabucket_equalish
-    )
-
-    if not is_great:
-        # Debug log for non-great moves as well (useful for tuning)
-        print("GREAT DEBUG:", {
-            "before_state": before_state,
-            "after_state": after_state,
-            "mover_before_cp": mover_before,
-            "mover_after_cp": mover_after,
-            "mover_delta": mover_delta,
-            "mover_improvement_cp": mover_delta,
-            "cp_loss_for_mover_cp": cp_loss_for_mover,
-            "delta_eval_white_cp": delta_eval_white,
-            "multipv_rank": norm_mpv,
-            "type1_conversion_perfect": type1_conversion_perfect,
-            "type2_conversion_near": type2_conversion_near,
-            "type3_defense": type3_defense,
-            "type4_intrabucket_equalish": type4_intrabucket_equalish,
-            "is_great": False,
-        })
+    # -------------------------------------------------------
+    # 2) Require basic PV data
+    # -------------------------------------------------------
+    if best_move_uci is None or best_line_material_gain_cp is None or move is None:
         return GreatMoveResult(
             is_great=False,
-            reason="conditions_not_met",
+            reason="missing_pv_data",
             mover_improvement_cp=mover_delta,
-            cp_loss_for_mover_cp=cp_loss_for_mover,
+            cp_loss_for_mover_cp=None,
             delta_eval_white_cp=delta_eval_white,
             before_state=before_state,
             after_state=after_state,
             pattern=None,
         )
 
-    # Pick a pattern label (priority order)
-    if type1_conversion_perfect:
-        pattern = "conversion_perfect"
-    elif type3_defense:
-        pattern = "defense"
-    elif type2_conversion_near:
-        pattern = "conversion_near"
-    else:
-        pattern = "intrabucket_equalish"
+    played_uci = move.uci()
 
+    # -------------------------------------------------------
+    # Helper: quick "was I clearly worse before?"
+    # -------------------------------------------------------
+    was_bad_before = before_state in ("Worse", "Lost")
+    became_good_or_equal = after_state in ("Equalish", "Winning", "Won")
+
+    # -------------------------------------------------------
+    # 3) Pattern #1: PV STARTER — Tactical win that changes the game
+    #    - You play the engine's best move
+    #    - PV line wins big material (≥ 300cp)
+    #    - Position actually improves for the mover (mover_delta)
+    #    - Typically from Equalish/Worse/Lost to something better
+    # -------------------------------------------------------
+    if (
+        played_uci == best_move_uci and
+        best_line_material_gain_cp >= 300 and
+        mover_delta >= 120 and                      # eval jumps meaningfully
+        before_state in ("Equalish", "Worse", "Lost")
+    ):
+        return GreatMoveResult(
+            is_great=True,
+            reason="pv_starter_tactical_win",
+            mover_improvement_cp=mover_delta,
+            cp_loss_for_mover_cp=None,
+            delta_eval_white_cp=delta_eval_white,
+            before_state=before_state,
+            after_state=after_state,
+            pattern="pv_tactical_win",
+        )
+
+    # -------------------------------------------------------
+    # 4) Pattern #2: PV STARTER — Defensive resource
+    #    - You were clearly worse before (Worse/Lost)
+    #    - You play the best move
+    #    - Best PV line saves a lot (≥ 150cp of material swing)
+    #    - Position improves significantly (often to Equalish+)
+    # -------------------------------------------------------
+    if (
+        played_uci == best_move_uci and
+        best_line_material_gain_cp >= 150 and
+        was_bad_before and
+        became_good_or_equal and
+        mover_delta >= 150
+    ):
+        return GreatMoveResult(
+            is_great=True,
+            reason="pv_starter_defensive_resource",
+            mover_improvement_cp=mover_delta,
+            cp_loss_for_mover_cp=None,
+            delta_eval_white_cp=delta_eval_white,
+            before_state=before_state,
+            after_state=after_state,
+            pattern="pv_defense",
+        )
+
+    # -------------------------------------------------------
+    # 5) Pattern #3: PV ALTERNATIVE — Different move, same big tactic
+    #    - Played move is NOT engine's top move
+    #    - But its PV also wins big material
+    #    - Both best PV and played PV are large tactical wins
+    #    - Position improves non-trivially from Equalish/Worse/Lost
+    # -------------------------------------------------------
+    if (
+        played_uci != best_move_uci and
+        played_material_gain_cp is not None and
+        best_line_material_gain_cp >= 400 and      # both lines huge
+        played_material_gain_cp >= 300 and
+        mover_delta >= 100 and
+        before_state in ("Equalish", "Worse", "Lost")
+    ):
+        return GreatMoveResult(
+            is_great=True,
+            reason="pv_alternative_combination",
+            mover_improvement_cp=mover_delta,
+            cp_loss_for_mover_cp=None,
+            delta_eval_white_cp=delta_eval_white,
+            before_state=before_state,
+            after_state=after_state,
+            pattern="pv_alternative",
+        )
+
+    # -------------------------------------------------------
+    # 6) No Great pattern matched
+    # -------------------------------------------------------
+    # (Optional) debug print for tuning:
     print("GREAT DEBUG:", {
         "before_state": before_state,
         "after_state": after_state,
         "mover_before_cp": mover_before,
         "mover_after_cp": mover_after,
-        "mover_improvement_cp": mover_delta,
-        "cp_loss_for_mover_cp": cp_loss_for_mover,
-        "delta_eval_white_cp": delta_eval_white,
-        "multipv_rank": norm_mpv,
-        "pattern": pattern,
-        "is_great": True,
+        "mover_delta": mover_delta,
+        "best_move_uci": best_move_uci,
+        "played_uci": played_uci,
+        "best_line_material_gain_cp": best_line_material_gain_cp,
+        "played_material_gain_cp": played_material_gain_cp,
+        "norm_mpv": norm_mpv,
     })
 
     return GreatMoveResult(
-        is_great=True,
-        reason="great_move",
+        is_great=False,
+        reason="conditions_not_met",
         mover_improvement_cp=mover_delta,
-        cp_loss_for_mover_cp=cp_loss_for_mover,
+        cp_loss_for_mover_cp=None,
         delta_eval_white_cp=delta_eval_white,
         before_state=before_state,
         after_state=after_state,
-        pattern=pattern,
+        pattern=None,
     )
+
