@@ -37,7 +37,6 @@ from basic_move_labels import (
     classify_basic_move,
     detect_great_move,
     detect_miss,
-    detect_missed_accept_sacrifice,
     detect_sacrifice,
     detect_sac_brilliancy,
     material_gain_for_move,
