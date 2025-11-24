@@ -525,7 +525,7 @@ class MissResult:
 
 @dataclass
 class MissParams:
-    max_self_drop_cp: int = 500
+    max_self_drop_cp: int = 750
     min_opportunity_cp: int = 200
     tactical_min_gain_cp: int = 200
 
@@ -660,41 +660,67 @@ def detect_miss(
                     pass
 
 
-    # 4) PV material win missed (STRICT + RELATIVE + STATE-AWARE)
-
-        # 4) PV material win missed (STRICT + only if we did NOT play the PV move)
+    # 4) PV material win missed (ignore played_material_gain_cp; trust PV)
     if best_line_material_gain_cp is not None and best_move_uci and move is not None:
         played_uci = move.uci()
 
-        # If we actually played the engine's best move, it's *not* a PV miss.
+        # Only if we did NOT start the best PV
         if played_uci != best_move_uci:
-            played_gain = played_material_gain_cp or 0
-            extra_gain  = best_line_material_gain_cp - played_gain
-
             if (
-                # PV wins clearly more material than our move
-                extra_gain >= params.missed_material_min_gain_cp and  # e.g. 200–300
+                # PV shows a *real* big win (queen, piece, etc.)
+                best_line_material_gain_cp >= params.missed_material_min_gain_cp and
 
-                # We're not totally lost before/after
+                # We're not completely dead-lost beforehand
                 before_state not in ("Lost",) and
-                after_state  not in ("Lost",) and
 
-                # We didn't nuke our position (then it's a blunder, not Miss)
-                self_drop <= params.max_self_drop_cp and
-
-                # Tactic should matter – mostly in equal / winning positions
-                before_state in ("Equalish", "Winning")
+                # We didn't totally destroy our position (otherwise it's pure blunder)
+                self_drop <= params.max_self_drop_cp
             ):
                 print("MISS DEBUG: missed_pv_material_gain = True", {
                     "best_line_material_gain_cp": best_line_material_gain_cp,
-                    "played_material_gain_cp": played_gain,
-                    "extra_gain_cp": extra_gain,
                     "before_state": before_state,
                     "after_state": after_state,
                     "best_move_uci": best_move_uci,
                     "played_move_uci": played_uci,
                 })
                 return MissResult(True, "missed_pv_material_gain")
+
+
+        # 4) PV material win missed (STRICT + only if we did NOT play the PV move)
+    # if best_line_material_gain_cp is not None and best_move_uci and move is not None:
+    #     played_uci = move.uci()
+
+    #     # If we actually played the engine's best move, it's *not* a PV miss.
+    #     if played_uci != best_move_uci:
+    #         played_gain = played_material_gain_cp or 0
+    #         extra_gain  = best_line_material_gain_cp - played_gain
+
+    #         if (
+    #             # PV wins clearly more material than our move
+    #             extra_gain >= params.missed_material_min_gain_cp and  # e.g. 200–300
+
+    #             # We're not totally lost before/after
+    #             before_state not in ("Lost",) and
+    #             after_state  not in ("Lost",) and
+
+    #             # We didn't nuke our position (then it's a blunder, not Miss)
+    #             self_drop <= params.max_self_drop_cp and
+
+    #             # Tactic should matter – mostly in equal / winning positions
+    #             before_state in ("Equalish", "Winning")
+    #         ):
+    #             print("MISS DEBUG: missed_pv_material_gain = True", {
+    #                 "best_line_material_gain_cp": best_line_material_gain_cp,
+    #                 "played_material_gain_cp": played_gain,
+    #                 "extra_gain_cp": extra_gain,
+    #                 "before_state": before_state,
+    #                 "after_state": after_state,
+    #                 "best_move_uci": best_move_uci,
+    #                 "played_move_uci": played_uci,
+    #             })
+    #             return MissResult(True, "missed_pv_material_gain")
+
+
 
     # if best_line_material_gain_cp is not None:
     #     played_gain = played_material_gain_cp or 0
