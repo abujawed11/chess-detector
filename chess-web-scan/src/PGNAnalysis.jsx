@@ -89,6 +89,7 @@ export default function PGNAnalysis() {
   const playIntervalRef = useRef(null);
   const listContainerRef = useRef(null);
   const badgeTimeoutRef = useRef(null);
+  const cancelAnalysisRef = useRef(false);
 
   const { initialized, analyze, stop: stopHintAnalysis } = useStockfish();
 
@@ -179,6 +180,7 @@ export default function PGNAnalysis() {
     if (!game || !initialized) return;
     setIsAnalyzing(true);
     setAnalysisProgress(0);
+    cancelAnalysisRef.current = false; // Reset cancel flag
     const analyzed = [];
 
     try {
@@ -186,6 +188,16 @@ export default function PGNAnalysis() {
       const history = game.history({ verbose: true });
 
       for (let i = 0; i < history.length; i++) {
+        // Check if analysis was cancelled
+        if (cancelAnalysisRef.current) {
+          console.log('⚠️ Analysis cancelled by user');
+          // Save partial results if any
+          if (analyzed.length > 0) {
+            setAnalyzedMoves(analyzed);
+          }
+          break;
+        }
+
         const move = history[i];
         const fen = analysisGame.fen();
         const uciMove = move.from + move.to + (move.promotion || '');
@@ -230,11 +242,15 @@ export default function PGNAnalysis() {
         setAnalysisProgress(((i + 1) / history.length) * 100);
       }
 
-      setAnalyzedMoves(analyzed);
-
-      // IMPORTANT: Stop the engine after analysis completes to free CPU
-      console.log('✅ Analysis complete! Stopping engine to free CPU...');
-      await stopEngine();
+      if (!cancelAnalysisRef.current) {
+        setAnalyzedMoves(analyzed);
+        // IMPORTANT: Stop the engine after analysis completes to free CPU
+        console.log('✅ Analysis complete! Stopping engine to free CPU...');
+        await stopEngine();
+      } else {
+        console.log('⚠️ Analysis cancelled - engine stopped');
+        await stopEngine();
+      }
     } catch (error) {
       console.error('Analysis error:', error);
       alert(
@@ -244,6 +260,7 @@ export default function PGNAnalysis() {
       await stopEngine();
     } finally {
       setIsAnalyzing(false);
+      cancelAnalysisRef.current = false; // Reset flag
     }
   }, [game, initialized, stopEngine, analysisDepth]);
 
@@ -1772,6 +1789,38 @@ export default function PGNAnalysis() {
           <p className="mt-1 text-xs font-medium text-slate-600">
             📊 Using depth: <strong className="text-purple-600">{analysisDepth}</strong>
           </p>
+
+          {/* Cancel button */}
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => {
+                console.log('🛑 Cancel button clicked');
+                cancelAnalysisRef.current = true;
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(239, 68, 68, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(239, 68, 68, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.95)';
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease'
+              }}
+              className="rounded-lg px-6 py-2 font-bold text-white"
+            >
+              ⏹ Cancel Analysis
+            </button>
+          </div>
         </div>
       )}
 
@@ -1923,6 +1972,76 @@ export default function PGNAnalysis() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Re-analyze button - shown after analysis is complete */}
+      {analyzedMoves.length > 0 && !isAnalyzing && (
+        <div className="mb-4 rounded-xl border-2 border-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50 p-5 text-center shadow-md">
+          <p className="mb-3 text-sm font-semibold text-slate-800">
+            🔄 Want to analyze with a different depth?
+          </p>
+
+          {/* Depth Selection */}
+          <div className="mb-4 flex items-center justify-center gap-3">
+            <label className="text-sm font-semibold text-slate-700">
+              Analysis Depth:
+            </label>
+            <select
+              value={analysisDepth}
+              onChange={(e) => setAnalysisDepth(Number(e.target.value))}
+              className="rounded-lg border-2 border-indigo-300 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm transition hover:border-indigo-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            >
+              <option value={15}>15 (Fast)</option>
+              <option value={18}>18 (Balanced)</option>
+              <option value={20}>20 (Deep)</option>
+              <option value={22}>22 (Very Deep)</option>
+            </select>
+          </div>
+
+          <button
+            onClick={analyzeGame}
+            disabled={!initialized}
+            onMouseEnter={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 20px 40px -12px rgba(99, 102, 241, 0.5), 0 8px 16px -8px rgba(0, 0, 0, 0.2)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(99, 102, 241, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+              }
+            }}
+            onMouseDown={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(0.95)';
+              }
+            }}
+            onMouseUp={(e) => {
+              if (initialized) {
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }
+            }}
+            style={{
+              background: !initialized
+                ? '#94a3b8'
+                : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              cursor: !initialized ? 'not-allowed' : 'pointer',
+              boxShadow: !initialized
+                ? 'none'
+                : '0 10px 15px -3px rgba(99, 102, 241, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease'
+            }}
+            className="rounded-xl px-8 py-3 text-base font-bold text-white"
+          >
+            {initialized ? '🔄 Re-analyze Game' : '⏳ Waiting for Engine...'}
+          </button>
+
+          <p className="mt-3 text-xs font-medium text-slate-600">
+            ⚡ This will replace the current analysis results
+          </p>
         </div>
       )}
 
