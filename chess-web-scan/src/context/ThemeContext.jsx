@@ -118,32 +118,35 @@ const ThemeContext = createContext();
 
 const STORAGE_KEY = 'chess-theme-preferences';
 
-export function ThemeProvider({ children }) {
-  const [boardTheme, setBoardTheme] = useState('classic');
-  const [pieceTheme, setPieceTheme] = useState('cburnett');
-
-  // Load theme from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const { boardTheme: savedBoard, pieceTheme: savedPiece } = JSON.parse(saved);
-        if (savedBoard && BOARD_THEMES[savedBoard]) {
-          setBoardTheme(savedBoard);
-        }
-        if (savedPiece && PIECE_THEMES[savedPiece]) {
-          setPieceTheme(savedPiece);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load theme preferences:', e);
+// Helper function to load initial theme from localStorage
+function getInitialTheme() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        boardTheme: BOARD_THEMES[parsed.boardTheme] ? parsed.boardTheme : 'classic',
+        pieceTheme: PIECE_THEMES[parsed.pieceTheme] ? parsed.pieceTheme : 'cburnett',
+      };
     }
-  }, []);
+  } catch (e) {
+    console.error('Failed to load theme preferences:', e);
+  }
+  return { boardTheme: 'classic', pieceTheme: 'cburnett' };
+}
+
+export function ThemeProvider({ children }) {
+  // Load theme synchronously during initialization
+  const initialTheme = getInitialTheme();
+  const [boardTheme, setBoardTheme] = useState(initialTheme.boardTheme);
+  const [pieceTheme, setPieceTheme] = useState(initialTheme.pieceTheme);
 
   // Save theme to localStorage when changed
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ boardTheme, pieceTheme }));
+      const themeData = { boardTheme, pieceTheme };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(themeData));
+      console.log('✅ Theme saved:', themeData);
     } catch (e) {
       console.error('Failed to save theme preferences:', e);
     }
