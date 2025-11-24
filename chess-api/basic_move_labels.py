@@ -559,6 +559,9 @@ class MissParams:
     # Free material
     missed_material_min_gain_cp: int = 200
 
+    # PV material tolerance (if played move wins within this amount, not a miss)
+    pv_material_tolerance_cp: int = 100
+
     # Forced mate
     mate_miss_max_plies: int = 4
     mate_miss_tolerance_plies: int = 1
@@ -680,15 +683,23 @@ def detect_miss(
                     pass
 
 
-    # 4) PV material win missed (ignore played_material_gain_cp; trust PV)
+    # 4) PV material win missed - FIXED to avoid false misses
     if best_line_material_gain_cp is not None and best_move_uci and move is not None:
         played_uci = move.uci()
+        played_gain = played_material_gain_cp or 0
 
         # Only if we did NOT start the best PV
         if played_uci != best_move_uci:
+            # Calculate how much EXTRA material the best line would have won
+            extra_material = best_line_material_gain_cp - played_gain
+
             if (
                 # PV shows a *real* big win (queen, piece, etc.)
                 best_line_material_gain_cp >= params.missed_material_min_gain_cp and
+
+                # CRITICAL FIX: We must have missed SIGNIFICANT extra material
+                # If both moves win similar material (within tolerance), it's NOT a miss
+                extra_material >= params.pv_material_tolerance_cp and  # prevents false misses
 
                 # We're not completely dead-lost beforehand
                 before_state not in ("Lost",) and
@@ -698,6 +709,8 @@ def detect_miss(
             ):
                 print("MISS DEBUG: missed_pv_material_gain = True", {
                     "best_line_material_gain_cp": best_line_material_gain_cp,
+                    "played_material_gain_cp": played_gain,
+                    "extra_material_missed": extra_material,
                     "before_state": before_state,
                     "after_state": after_state,
                     "best_move_uci": best_move_uci,

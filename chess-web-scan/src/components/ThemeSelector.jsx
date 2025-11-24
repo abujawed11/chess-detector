@@ -211,12 +211,14 @@ export default function ThemeSelector() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(8, 1fr)',
+                gridTemplateRows: 'repeat(8, 1fr)',
                 width: '100%',
                 maxWidth: 320,
                 aspectRatio: '1',
                 borderRadius: 8,
                 overflow: 'hidden',
-                margin: '0 auto'
+                margin: '0 auto',
+                gap: 0
               }}>
                 {Array.from({ length: 64 }).map((_, i) => {
                   const row = Math.floor(i / 8);
@@ -244,7 +246,10 @@ export default function ThemeSelector() {
                         background: isLight ? boardColors.light : boardColors.dark,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        width: '100%',
+                        height: '100%',
+                        aspectRatio: '1'
                       }}
                     >
                       {piece && (
