@@ -6,16 +6,17 @@ import { useTheme } from '../context/ThemeContext';
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-export default function InteractiveBoard({ 
-  fen, 
-  onMove, 
-  highlightSquares = [], 
-  flipped = false, 
-  bestMove = null, 
+export default function InteractiveBoard({
+  fen,
+  onMove,
+  highlightSquares = [],
+  flipped = false,
+  bestMove = null,
   hoverMove = null,
   moveBadge = null, // { square: 'e4', classification: 'brilliant', label: 'Brilliant' }
   lastMove = null, // { from: 'e2', to: 'e4' }
-  tacticalMotifs = [] // Array of { type, square, icon, color }
+  tacticalMotifs = [], // Array of { type, square, icon, color }
+  disabled = false // Disable user input (for computer moves)
 }) {
   const [chess] = useState(new Chess(fen));
   const [draggedPiece, setDraggedPiece] = useState(null);
@@ -72,6 +73,8 @@ export default function InteractiveBoard({
 
   // Handle square click
   const handleSquareClick = useCallback((square) => {
+    if (disabled) return; // Disable interaction when computer is playing
+
     if (selectedSquare) {
       // Try to make move
       const moves = chess.moves({ square: selectedSquare, verbose: true });
@@ -110,10 +113,15 @@ export default function InteractiveBoard({
         setLegalMoves(moves.map(m => m.to));
       }
     }
-  }, [selectedSquare, chess, onMove, getPieceAt, isPromotion]);
+  }, [selectedSquare, chess, onMove, getPieceAt, isPromotion, disabled]);
 
   // Drag handlers
   const handleDragStart = useCallback((e, square) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+
     const piece = getPieceAt(square);
     if (!piece || piece.color !== chess.turn()) {
       e.preventDefault();
@@ -128,7 +136,7 @@ export default function InteractiveBoard({
     img.onload = () => {
       e.dataTransfer.setDragImage(img, 40, 40);
     };
-  }, [chess, getPieceAt, pieceSet.id]);
+  }, [chess, getPieceAt, pieceSet.id, disabled]);
 
   const handleDragOver = useCallback((e, square) => {
     e.preventDefault();

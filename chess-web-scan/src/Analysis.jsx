@@ -87,7 +87,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [threadInfo, setThreadInfo] = useState({ current: 1, max: 1, supportsMultiThreading: false });
   const [moveBadge, setMoveBadge] = useState(null); // { square, classification, label, color, symbol }
 
+  // Play Computer mode state
+  const [playComputerMode, setPlayComputerMode] = useState(false);
+  const [showPlayComputerModal, setShowPlayComputerModal] = useState(false);
+  const [whitePlayer, setWhitePlayer] = useState('human'); // 'human' or 'computer'
+  const [blackPlayer, setBlackPlayer] = useState('computer'); // 'human' or 'computer'
+  const [computerThinking, setComputerThinking] = useState(false);
+  const [computerDelay, setComputerDelay] = useState(2000); // Default 2 seconds, 5 seconds for computer vs computer
+
   const badgeTimeoutRef = useRef(null);
+  const computerMoveTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (initialized && getThreadInfo) {
@@ -101,6 +110,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
     return () => {
       if (badgeTimeoutRef.current) {
         clearTimeout(badgeTimeoutRef.current);
+      }
+      if (computerMoveTimeoutRef.current) {
+        clearTimeout(computerMoveTimeoutRef.current);
       }
     };
   }, []);
@@ -577,6 +589,109 @@ export default function Analysis({ initialFen, onEditPosition }) {
     [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]
   );
 
+  // Function to make computer move
+  const makeComputerMove = useCallback(async () => {
+    if (!initialized || isProcessingMove || computerThinking) return;
+
+    // Check if game is over
+    try {
+      const tempGame = new Chess(currentFen);
+      if (tempGame.isGameOver()) {
+        setPlayComputerMode(false);
+        return;
+      }
+    } catch (e) {
+      return;
+    }
+
+    setComputerThinking(true);
+
+    try {
+      // Analyze position to get best move
+      const result = await analyze(currentFen, { depth: analysisDepth, multiPV: 1 });
+
+      if (result?.bestMove) {
+        const from = result.bestMove.substring(0, 2);
+        const to = result.bestMove.substring(2, 4);
+        const promotion = result.bestMove.length > 4 ? result.bestMove[4] : undefined;
+
+        // Create temporary game to execute move
+        const tempGame = new Chess(currentFen);
+        const moveResult = tempGame.move({ from, to, promotion });
+
+        if (moveResult) {
+          // Execute the move through handleMove
+          await handleMove(moveResult, tempGame.fen());
+        }
+      }
+    } catch (err) {
+      console.error('Computer move error:', err);
+    } finally {
+      setComputerThinking(false);
+    }
+  }, [initialized, isProcessingMove, computerThinking, currentFen, analyze, analysisDepth, handleMove]);
+
+  // Effect to trigger computer moves when it's computer's turn
+  useEffect(() => {
+    if (!playComputerMode || !initialized || isProcessingMove || computerThinking) return;
+
+    // Determine current turn
+    const turn = currentFen.split(' ')[1]; // 'w' or 'b'
+    const currentPlayer = turn === 'w' ? whitePlayer : blackPlayer;
+
+    // Check if it's computer's turn
+    if (currentPlayer !== 'computer') return;
+
+    // Check if game is over
+    try {
+      const tempGame = new Chess(currentFen);
+      if (tempGame.isGameOver()) {
+        setPlayComputerMode(false);
+        return;
+      }
+    } catch (e) {
+      return;
+    }
+
+    // Determine delay - 5 seconds for computer vs computer, otherwise 2 seconds
+    const delay = (whitePlayer === 'computer' && blackPlayer === 'computer') ? 5000 : computerDelay;
+
+    // Clear any existing timeout
+    if (computerMoveTimeoutRef.current) {
+      clearTimeout(computerMoveTimeoutRef.current);
+    }
+
+    // Schedule computer move with delay
+    computerMoveTimeoutRef.current = setTimeout(() => {
+      makeComputerMove();
+    }, delay);
+
+    return () => {
+      if (computerMoveTimeoutRef.current) {
+        clearTimeout(computerMoveTimeoutRef.current);
+      }
+    };
+  }, [playComputerMode, initialized, isProcessingMove, computerThinking, currentFen, whitePlayer, blackPlayer, computerDelay, makeComputerMove]);
+
+  // Stop play computer mode when navigating through moves
+  const handlePlayComputerToggle = useCallback(() => {
+    if (playComputerMode) {
+      // Stop computer play
+      setPlayComputerMode(false);
+      if (computerMoveTimeoutRef.current) {
+        clearTimeout(computerMoveTimeoutRef.current);
+      }
+    } else {
+      // Show modal to configure
+      setShowPlayComputerModal(true);
+    }
+  }, [playComputerMode]);
+
+  // Start play computer mode with current settings
+  const startPlayComputerMode = useCallback(() => {
+    setShowPlayComputerModal(false);
+    setPlayComputerMode(true);
+  }, []);
 
   const navigateToMove = useCallback((moveIndex) => {
     // Handle going to start position (moveIndex === -1)
@@ -866,6 +981,19 @@ export default function Analysis({ initialFen, onEditPosition }) {
           </div>
 
           <button
+            onClick={handlePlayComputerToggle}
+            disabled={!initialized || isGameOver}
+            className={`rounded-lg px-4 py-2 font-bold text-white transition
+              ${playComputerMode
+                ? 'bg-orange-600 hover:bg-orange-700'
+                : initialized && !isGameOver
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-slate-400 cursor-not-allowed'}`}
+          >
+            {playComputerMode ? '⏹ Stop Computer' : '🤖 Play Computer'}
+          </button>
+
+          <button
             onClick={() => setFlipped(f => !f)}
             className="rounded-lg bg-violet-600 px-4 py-2 font-bold text-white"
           >
@@ -895,7 +1023,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
         {/* Left side: Evaluation bar + Board */}
         <div className="flex items-start gap-4">
           {/* Evaluation bar */}
-          <div className="w-12 flex-shrink-0">
+          <div className="w-12 shrink-0">
             <EvaluationBar score={currentEval} fen={currentFen} height={680} />
           </div>
 
@@ -910,6 +1038,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 hoverMove={hoverMove}
                 lastMove={lastMove}
                 moveBadge={moveBadge}
+                disabled={playComputerMode && (
+                  (turn === 'w' && whitePlayer === 'computer') ||
+                  (turn === 'b' && blackPlayer === 'computer')
+                )}
               />
               {!initialized && (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-100/95 rounded-xl">
@@ -974,7 +1106,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
         </div>
 
         {/* Right panel */}
-        <div className="w-full max-w-[460px] space-y-3 xl:sticky xl:top-4 xl:w-[460px] xl:flex-shrink-0">
+        <div className="w-full max-w-[460px] space-y-3 xl:sticky xl:top-4 xl:w-[460px] xl:shrink-0">
           {/* Move Details Panel - shows all backend evaluation data */}
           {currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
             <MoveDetailsPanel
@@ -1014,7 +1146,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           {/* Brilliant Move Details - show when move is brilliant V2 */}
           {lastMoveClassification?.isBrilliantV2 && lastMoveClassification?.brilliantAnalysis && (
-            <div className="rounded-xl border-2 border-cyan-400 bg-gradient-to-br from-cyan-50 to-teal-50 p-4 shadow-lg">
+            <div className="rounded-xl border-2 border-cyan-400 bg-linear-to-br from-cyan-50 to-teal-50 p-4 shadow-lg">
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-2xl">💎</span>
                 <div className="text-lg font-extrabold text-cyan-600">
@@ -1083,7 +1215,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           {/* Best move - only show when available */}
           {bestMove && (
-            <div className="flex min-h-[90px] items-center rounded-xl border-2 border-green-200 bg-gradient-to-br from-green-50 to-green-100 p-3 shadow transition-all duration-200">
+            <div className="flex min-h-[90px] items-center rounded-xl border-2 border-green-200 bg-linear-to-br from-green-50 to-green-100 p-3 shadow transition-all duration-200">
               <div className="w-full">
                 <div className="mb-1 flex items-center gap-2 text-xs font-semibold">
                   <span>🎯 Best Move</span>
@@ -1102,7 +1234,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
           )}
 
           {/* Current eval - always visible */}
-          <div className="flex min-h-[80px] items-center rounded-xl border border-slate-200 bg-white p-3 shadow transition-all duration-200">
+          <div className="flex min-h-20 items-center rounded-xl border border-slate-200 bg-white p-3 shadow transition-all duration-200">
             {isGameOver ? (
               <div className="w-full">
                 <div className="mb-1 text-xs font-bold text-slate-700">Game Status</div>
@@ -1202,11 +1334,131 @@ export default function Analysis({ initialFen, onEditPosition }) {
         <strong>💡 How to use:</strong>
         <ul className="ml-5 mt-2 list-disc space-y-1">
           <li><strong>Auto-analyze</strong> classifies moves as you play.</li>
-          <li><strong>Show Best Move</strong> draws a green arrow for the engine’s choice.</li>
+          <li><strong>Show Best Move</strong> draws a green arrow for the engine's choice.</li>
           <li><strong>Get Hint</strong> shows a one-time arrow for the current position.</li>
           <li>Click history to jump; the evaluation bar shows the advantage.</li>
         </ul>
       </div>
+
+      {/* Play Computer Modal */}
+      {showPlayComputerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-4 text-xl font-bold text-slate-900">Play Computer Settings</h3>
+
+            <div className="space-y-4">
+              {/* White player selection */}
+              <div className="rounded-lg border border-slate-200 p-4">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  White plays as:
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setWhitePlayer('human')}
+                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
+                      ${whitePlayer === 'human'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    👤 Human
+                  </button>
+                  <button
+                    onClick={() => setWhitePlayer('computer')}
+                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
+                      ${whitePlayer === 'computer'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    🤖 Computer
+                  </button>
+                </div>
+              </div>
+
+              {/* Black player selection */}
+              <div className="rounded-lg border border-slate-200 p-4">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Black plays as:
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setBlackPlayer('human')}
+                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
+                      ${blackPlayer === 'human'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    👤 Human
+                  </button>
+                  <button
+                    onClick={() => setBlackPlayer('computer')}
+                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
+                      ${blackPlayer === 'computer'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    🤖 Computer
+                  </button>
+                </div>
+              </div>
+
+              {/* Info about delay */}
+              {whitePlayer === 'computer' && blackPlayer === 'computer' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                  <strong>Note:</strong> When both sides are computer, moves will be played with a 5-second delay so you can watch the game.
+                </div>
+              )}
+
+              {/* Summary */}
+              <div className="rounded-lg bg-slate-50 p-3 text-center text-sm">
+                <span className="font-semibold">
+                  {whitePlayer === 'human' ? '👤 You' : '🤖 Computer'} (White)
+                </span>
+                {' vs '}
+                <span className="font-semibold">
+                  {blackPlayer === 'human' ? '👤 You' : '🤖 Computer'} (Black)
+                </span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowPlayComputerModal(false)}
+                className="flex-1 rounded-lg bg-slate-200 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={startPlayComputerMode}
+                className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 transition"
+              >
+                Start Playing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Computer thinking indicator */}
+      {playComputerMode && computerThinking && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-white shadow-lg">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          <span className="font-semibold">Computer is thinking...</span>
+        </div>
+      )}
+
+      {/* Play Computer mode indicator */}
+      {playComputerMode && !computerThinking && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-white shadow-lg">
+          <span className="font-semibold">
+            🤖 {whitePlayer === 'computer' && blackPlayer === 'computer'
+              ? 'Computer vs Computer'
+              : turn === 'w'
+                ? (whitePlayer === 'computer' ? 'Computer to move' : 'Your turn (White)')
+                : (blackPlayer === 'computer' ? 'Computer to move' : 'Your turn (Black)')}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
