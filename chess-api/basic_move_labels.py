@@ -81,6 +81,7 @@ def detect_sacrifice(
     move: chess.Move,
     params: Optional[SacrificeParams] = None,
     eval_func: Optional[Callable[[chess.Board], float]] = None,  # NEW
+    use_eval_reject_filter: bool = True,   # NEW
 ) -> SacrificeResult:
     """
     Detect whether `move` is a material sacrifice using local exchange logic.
@@ -252,23 +253,42 @@ def detect_sacrifice(
                 best_after_accept_pov = after_accept_pov
         # ------------ END NEW PART ------------
 
-
         # If we had an eval_func, and even the BEST accepting capture
-    # still leaves the mover at least roughly OK (>= -50cp),
-    # then this is NOT a real sacrifice – it's a tactical trick.
-    if eval_func is not None and best_after_accept_pov != float('+inf'):
-        # threshold can be tuned; -50cp means "not clearly worse"
-        if best_after_accept_pov >= -50:
-            print("SAC DEBUG: Accepting never gives opponent real advantage -> not a sacrifice")
-            return SacrificeResult(
-                is_real_sacrifice=False,
-                is_big_sacrifice=False,
-                worst_net_loss_cp=0,
-                had_accepting_capture=had_accepting_capture,
-                offered_piece_cp=offered_piece_cp,
-                num_attackers_opponent=num_attackers_opponent,
-                num_attackers_mover=num_attackers_mover,
-            )
+        # still leaves the mover at least roughly OK (>= -50cp),
+        # then this is NOT a real sacrifice – it's a tactical trick.
+        if (
+            use_eval_reject_filter
+            and eval_func is not None
+            and best_after_accept_pov != float('+inf')
+        ):
+            # threshold can be tuned; -50cp means "not clearly worse"
+            if best_after_accept_pov >= -50:
+                print("SAC DEBUG: Accepting never gives opponent real advantage -> not a sacrifice")
+                return SacrificeResult(
+                    is_real_sacrifice=False,
+                    is_big_sacrifice=False,
+                    worst_net_loss_cp=0,
+                    had_accepting_capture=had_accepting_capture,
+                    offered_piece_cp=offered_piece_cp,
+                    num_attackers_opponent=num_attackers_opponent,
+                    num_attackers_mover=num_attackers_mover,
+                )
+
+
+
+    # if eval_func is not None and best_after_accept_pov != float('+inf'):
+    #     # threshold can be tuned; -50cp means "not clearly worse"
+    #     if best_after_accept_pov >= -50:
+    #         print("SAC DEBUG: Accepting never gives opponent real advantage -> not a sacrifice")
+    #         return SacrificeResult(
+    #             is_real_sacrifice=False,
+    #             is_big_sacrifice=False,
+    #             worst_net_loss_cp=0,
+    #             had_accepting_capture=had_accepting_capture,
+    #             offered_piece_cp=offered_piece_cp,
+    #             num_attackers_opponent=num_attackers_opponent,
+    #             num_attackers_mover=num_attackers_mover,
+    #         )
 
 
 

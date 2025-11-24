@@ -900,7 +900,13 @@ async def evaluate_move(
 
         # --- Sacrifice detection (returns full SacrificeResult) ---
         uci_move_obj = chess.Move.from_uci(move)
-        sac_result = detect_sacrifice(board_before, uci_move_obj, eval_func=eval_board_white_cp)
+        # sac_result = detect_sacrifice(board_before, uci_move_obj, eval_func=eval_board_white_cp)
+        sac_result = detect_sacrifice(
+            board_before,
+            uci_move_obj,
+            eval_func=eval_board_white_cp,
+            use_eval_reject_filter=False,  # 🔴 disable eval-based rejection for Brilliancy
+        )
         is_sacrifice = sac_result.is_real_sacrifice
 
         # --- Mate metadata ---
