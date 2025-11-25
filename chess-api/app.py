@@ -98,8 +98,33 @@ async def infer(
 ):
     try:
         import json
+        import time
+
+        request_start = time.time()
+
+        # Debug: Log what we received
+        logger.info(f"📥 Received /infer request")
+        logger.info(f"📎 File: filename={file.filename}, content_type={file.content_type}")
+        logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}")
+
+        read_start = time.time()
         content = await file.read()
+        read_time = time.time() - read_start
+        logger.info(f"📦 File content size: {len(content)} bytes (read in {read_time:.2f}s)")
+
+        if len(content) == 0:
+            logger.error("❌ File content is empty!")
+            return JSONResponse({"error": "Uploaded file is empty"}, status_code=400)
+
         image = Image.open(BytesIO(content))
+        logger.info(f"🖼️ Image loaded: size={image.size}, mode={image.mode}")
+
+        # DEBUG: Save received image to check what we got
+        debug_folder = "debug_uploads"
+        os.makedirs(debug_folder, exist_ok=True)
+        debug_path = os.path.join(debug_folder, f"received_{file.filename}")
+        image.save(debug_path)
+        logger.info(f"💾 Saved received image to: {debug_path}")
 
         # Parse manual corners if provided
         manual_corners = None
@@ -109,11 +134,17 @@ async def infer(
             except:
                 pass
 
+        detect_start = time.time()
+        logger.info(f"🤖 Running YOLO detection...")
         result, overlay_png, debug_png = DETECTOR.run(
             image,
             flip_ranks=flip_ranks,
             manual_corners=manual_corners
         )
+        detect_time = time.time() - detect_start
+        total_time = time.time() - request_start
+        logger.info(f"✅ Detection successful: FEN={result.get('fen', 'N/A')}")
+        logger.info(f"⏱️ Timing: Read={read_time:.2f}s, Detect={detect_time:.2f}s, Total={total_time:.2f}s")
 
         # Encode overlay image (warped board with detections)
         overlay_b64 = base64.b64encode(overlay_png).decode("ascii")
@@ -125,6 +156,7 @@ async def infer(
 
         return JSONResponse(result)
     except Exception as e:
+        logger.error(f"❌ Error in /infer: {str(e)}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
