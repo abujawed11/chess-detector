@@ -249,3 +249,7 @@ yolov8*.pt
 yolo11*.pt
 
 engine
+
+chess-api/debug_uploads
+
+models
