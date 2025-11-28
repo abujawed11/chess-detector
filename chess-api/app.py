@@ -14,6 +14,10 @@ from inference import Detector
 import logging
 import chess
 
+import hashlib
+from fastapi import Request
+
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,8 +94,16 @@ engine_lock = asyncio.Lock()
 def health():
     return {"ok": True}
 
+# @app.post("/infer")
+# async def infer(
+#     file: UploadFile = File(...),
+#     flip_ranks: bool = Form(False),
+#     corners: str = Form(None)  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+# ):
+
 @app.post("/infer")
 async def infer(
+    request: Request,
     file: UploadFile = File(...),
     flip_ranks: bool = Form(False),
     corners: str = Form(None)  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
@@ -103,14 +115,36 @@ async def infer(
         request_start = time.time()
 
         # Debug: Log what we received
-        logger.info(f"📥 Received /infer request")
+        # logger.info(f"📥 Received /infer request")
+        # logger.info(f"📎 File: filename={file.filename}, content_type={file.content_type}")
+        # logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}")
+
+        # read_start = time.time()
+        # content = await file.read()
+        # read_time = time.time() - read_start
+        # logger.info(f"📦 File content size: {len(content)} bytes (read in {read_time:.2f}s)")
+
+        request_start = time.time()
+
+        # --- Identify client (web vs mobile) ---
+        user_agent = request.headers.get("user-agent", "unknown")
+        client_tag = request.headers.get("x-client", "unknown")  # you can set this header from RN
+        logger.info("📥 Received /infer request")
+        logger.info(f"🧾 User-Agent={user_agent}")
+        logger.info(f"🧾 X-Client={client_tag}")  # e.g. 'web' or 'mobile'
+
         logger.info(f"📎 File: filename={file.filename}, content_type={file.content_type}")
         logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}")
 
+        # --- Read raw bytes and hash them ---
         read_start = time.time()
         content = await file.read()
         read_time = time.time() - read_start
-        logger.info(f"📦 File content size: {len(content)} bytes (read in {read_time:.2f}s)")
+        size_bytes = len(content)
+        sha256 = hashlib.sha256(content).hexdigest()
+        logger.info(f"📦 File content size: {size_bytes} bytes (read in {read_time:.2f}s)")
+        logger.info(f"🔐 SHA256={sha256}")
+
 
         if len(content) == 0:
             logger.error("❌ File content is empty!")
@@ -120,11 +154,23 @@ async def infer(
         logger.info(f"🖼️ Image loaded: size={image.size}, mode={image.mode}")
 
         # DEBUG: Save received image to check what we got
+        # debug_folder = "debug_uploads"
+        # os.makedirs(debug_folder, exist_ok=True)
+        # debug_path = os.path.join(debug_folder, f"received_{file.filename}")
+        # image.save(debug_path)
+        # logger.info(f"💾 Saved received image to: {debug_path}")
+
         debug_folder = "debug_uploads"
         os.makedirs(debug_folder, exist_ok=True)
-        debug_path = os.path.join(debug_folder, f"received_{file.filename}")
+
+        timestamp = int(time.time())
+        safe_name = file.filename or "upload"
+        debug_filename = f"{timestamp}_{client_tag}_{safe_name}"
+        debug_path = os.path.join(debug_folder, debug_filename)
+
         image.save(debug_path)
-        logger.info(f"💾 Saved received image to: {debug_path}")
+        logger.info(f"💾 Saved received image to: {debug_path} (size={image.size}, mode={image.mode})")
+
 
         # Parse manual corners if provided
         manual_corners = None

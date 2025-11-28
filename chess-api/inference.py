@@ -3,11 +3,15 @@ import io
 import os
 import math
 import cv2
+# from fastapi import logger
 import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 from labels import LABEL_TO_FEN, INDEX_TO_NAME
 
+
+import logging
+logger = logging.getLogger("uvicorn.error")
 
 WARP_SIZE = 2048 # square warp size - larger for better visualization
 
@@ -282,7 +286,11 @@ class Detector:
         If manual_corners is provided, uses them instead of auto-detection.
         manual_corners: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] as TL, TR, BR, BL
         Returns (result_dict, overlay_png_bytes, debug_png_bytes).
+        
         """
+
+        logger.info(f"[DETECTOR] Input image size={image.size}, mode={image.mode}")
+
         # Convert PIL to BGR
         bgr = self._pil_to_bgr(image)
         
