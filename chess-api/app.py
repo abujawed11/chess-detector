@@ -164,12 +164,12 @@ async def infer(
         logger.info(f"⏱️ Timing: Read={read_time:.2f}s, Detect={detect_time:.2f}s, Total={total_time:.2f}s")
 
         # Encode overlay image (warped board with detections)
-        overlay_b64 = base64.b64encode(overlay_png).decode("ascii")
-        result["overlay_png_base64"] = f"data:image/png;base64,{overlay_b64}"
+        # overlay_b64 = base64.b64encode(overlay_png).decode("ascii")
+        # result["overlay_png_base64"] = f"data:image/png;base64,{overlay_b64}"
 
-        # Encode debug image (original image with detected corners)
-        debug_b64 = base64.b64encode(debug_png).decode("ascii")
-        result["debug_png_base64"] = f"data:image/png;base64,{debug_b64}"
+        # # Encode debug image (original image with detected corners)
+        # debug_b64 = base64.b64encode(debug_png).decode("ascii")
+        # result["debug_png_base64"] = f"data:image/png;base64,{debug_b64}"
 
         return JSONResponse(result)
     except Exception as e:

@@ -1,0 +1,27 @@
+[Unit]
+Description=Chess Detector API Service
+After=network.target
+
+[Service]
+Type=notify
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/chess-detector/chess-api
+Environment="PATH=/home/ubuntu/chess-detector/chess-api/venv/bin"
+EnvironmentFile=/home/ubuntu/chess-detector/chess-api/.env
+ExecStart=/home/ubuntu/chess-detector/chess-api/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 2
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security and resource limits
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chess-api
+
+# Performance
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
