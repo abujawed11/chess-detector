@@ -60,14 +60,15 @@ export default function App(){
     setCorners(null)
     const url = URL.createObjectURL(f)
     setImgURL(url)
-    
-    // Auto-detect board corners
+
+    // Auto-detect board corners (fast, no overlay needed)
     setBusy(true)
     setStage('adjust')
     try {
       const fd = new FormData()
       fd.append('file', f)
       fd.append('flip_ranks', 'false')
+      // Don't request overlay for initial corner detection - much faster!
       const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
       const json = await res.json()
       if(res.ok && json.board_corners) {
@@ -101,17 +102,27 @@ export default function App(){
       fd.append('file', file)
       fd.append('flip_ranks', String(flipRanks))
       fd.append('corners', JSON.stringify(adjustedCorners))
-      
+      fd.append('include_overlay', '1')  // ✅ Request overlay for preview in board editor (1 = True)
+
+      console.log('🚀 Requesting FEN with include_overlay=true')
       const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
       const json = await res.json()
+      console.log('📦 Response received:', {
+        hasFen: !!json.fen,
+        hasOverlay: !!json.overlay_png_base64,
+        hasDebug: !!json.debug_png_base64,
+        overlayLength: json.overlay_png_base64?.length
+      })
+
       if(!res.ok){ throw new Error(json?.error || 'Inference failed') }
-      
+
       setFEN(json.fen)
       setNumPieces(json.num_pieces || 0)
       setOverlayURL(json.overlay_png_base64)
       setStage('result')
       console.log('Detection result:', json)
     } catch(err){
+      console.error('❌ Error:', err)
       alert(err.message)
     } finally{ setBusy(false) }
   }

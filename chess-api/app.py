@@ -93,7 +93,8 @@ async def infer(
     request: Request,
     file: UploadFile = File(...),
     flip_ranks: bool = Form(False),
-    corners: str = Form(None)  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+    corners: str = Form(None),  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+    include_overlay: bool = Form(False)  # Set to True when you need the preview image
 ):
     try:
         import json
@@ -111,7 +112,7 @@ async def infer(
         logger.info(f"🧾 X-Client={client_tag}")  # e.g. 'web' or 'mobile'
 
         logger.info(f"📎 File: filename={file.filename}, content_type={file.content_type}")
-        logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}")
+        logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}, include_overlay={include_overlay}")
 
         # --- Read raw bytes and hash them ---
         read_start = time.time()
@@ -163,13 +164,32 @@ async def infer(
         logger.info(f"✅ Detection successful: FEN={result.get('fen', 'N/A')}")
         logger.info(f"⏱️ Timing: Read={read_time:.2f}s, Detect={detect_time:.2f}s, Total={total_time:.2f}s")
 
-        # Encode overlay image (warped board with detections)
-        # overlay_b64 = base64.b64encode(overlay_png).decode("ascii")
-        # result["overlay_png_base64"] = f"data:image/png;base64,{overlay_b64}"
+        # Encode overlay image only if requested (for board editor preview)
+        logger.info(f"🖼️ include_overlay={include_overlay}, will encode overlay: {include_overlay}")
+        if include_overlay:
+            logger.info(f"📸 Encoding overlay images (compressed)...")
+            try:
+                # Compress images for faster transmission (optional optimization)
+                overlay_img = Image.open(BytesIO(overlay_png))
+                overlay_img.thumbnail((800, 800), Image.Resampling.LANCZOS)  # Resize to max 800x800
+                overlay_buffer = BytesIO()
+                overlay_img.save(overlay_buffer, format='JPEG', quality=85, optimize=True)
+                overlay_b64 = base64.b64encode(overlay_buffer.getvalue()).decode("ascii")
+                result["overlay_png_base64"] = f"data:image/jpeg;base64,{overlay_b64}"
+                logger.info(f"✅ Overlay encoded: {len(overlay_b64)} chars")
 
-        # # Encode debug image (original image with detected corners)
-        # debug_b64 = base64.b64encode(debug_png).decode("ascii")
-        # result["debug_png_base64"] = f"data:image/png;base64,{debug_b64}"
+                # Compress debug image too
+                debug_img = Image.open(BytesIO(debug_png))
+                debug_img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+                debug_buffer = BytesIO()
+                debug_img.save(debug_buffer, format='JPEG', quality=85, optimize=True)
+                debug_b64 = base64.b64encode(debug_buffer.getvalue()).decode("ascii")
+                result["debug_png_base64"] = f"data:image/jpeg;base64,{debug_b64}"
+                logger.info(f"✅ Debug image encoded: {len(debug_b64)} chars")
+            except Exception as e:
+                logger.error(f"❌ Error encoding overlay: {str(e)}", exc_info=True)
+        else:
+            logger.info(f"⏭️ Skipping overlay encoding (include_overlay=False)")
 
         return JSONResponse(result)
     except Exception as e:
