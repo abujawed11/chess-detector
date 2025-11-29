@@ -50,13 +50,6 @@ from opening_book import is_book_move
 
 from basic_move_labels import cp_for_player
 
-# from basic_move_labels import (
-#     classify_basic_move,
-#     detect_miss,
-#     detect_book_move,
-#     classify_exclam_move,
-#     is_real_sacrifice,
-# )
 
 # from opening_book import is_book_move
 
@@ -94,12 +87,6 @@ engine_lock = asyncio.Lock()
 def health():
     return {"ok": True}
 
-# @app.post("/infer")
-# async def infer(
-#     file: UploadFile = File(...),
-#     flip_ranks: bool = Form(False),
-#     corners: str = Form(None)  # JSON string of corners [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-# ):
 
 @app.post("/infer")
 async def infer(
@@ -113,16 +100,6 @@ async def infer(
         import time
 
         request_start = time.time()
-
-        # Debug: Log what we received
-        # logger.info(f"📥 Received /infer request")
-        # logger.info(f"📎 File: filename={file.filename}, content_type={file.content_type}")
-        # logger.info(f"🔄 flip_ranks={flip_ranks}, corners={corners}")
-
-        # read_start = time.time()
-        # content = await file.read()
-        # read_time = time.time() - read_start
-        # logger.info(f"📦 File content size: {len(content)} bytes (read in {read_time:.2f}s)")
 
         request_start = time.time()
 
@@ -153,23 +130,17 @@ async def infer(
         image = Image.open(BytesIO(content))
         logger.info(f"🖼️ Image loaded: size={image.size}, mode={image.mode}")
 
-        # DEBUG: Save received image to check what we got
+
         # debug_folder = "debug_uploads"
         # os.makedirs(debug_folder, exist_ok=True)
-        # debug_path = os.path.join(debug_folder, f"received_{file.filename}")
+
+        # timestamp = int(time.time())
+        # safe_name = file.filename or "upload"
+        # debug_filename = f"{timestamp}_{client_tag}_{safe_name}"
+        # debug_path = os.path.join(debug_folder, debug_filename)
+
         # image.save(debug_path)
-        # logger.info(f"💾 Saved received image to: {debug_path}")
-
-        debug_folder = "debug_uploads"
-        os.makedirs(debug_folder, exist_ok=True)
-
-        timestamp = int(time.time())
-        safe_name = file.filename or "upload"
-        debug_filename = f"{timestamp}_{client_tag}_{safe_name}"
-        debug_path = os.path.join(debug_folder, debug_filename)
-
-        image.save(debug_path)
-        logger.info(f"💾 Saved received image to: {debug_path} (size={image.size}, mode={image.mode})")
+        # logger.info(f"💾 Saved received image to: {debug_path} (size={image.size}, mode={image.mode})")
 
 
         # Parse manual corners if provided
@@ -709,60 +680,6 @@ def analyze_or_fail(fen: str, depth: int, multipv: int, engine):
     raise RuntimeError(f"No PVs returned for fen='{fen[:60]}...'. Last error: {last_err}")
 
 
-
-# def eval_best_accept_line_white(
-#     board_before: chess.Board,
-#     sac_target_square: int,
-#     mover_color: str,
-#     depth: int,
-#     engine,
-# ) -> Optional[float]:
-#     """
-#     Compute eval_from_white POV after the *best* accepting capture
-#     on sac_target_square, from board_before.
-
-#     Returns:
-#         eval_accept_white (centipawns from White POV) or None
-#         if no accepting capture exists.
-#     """
-#     # Find all legal accepting captures
-#     accepting_moves = [
-#         mv for mv in board_before.legal_moves
-#         if board_before.is_capture(mv) and mv.to_square == sac_target_square
-#     ]
-
-#     if not accepting_moves:
-#         return None
-
-#     best_eval_white = None
-#     best_eval_mover = None
-
-#     for mv in accepting_moves:
-#         b_accept = board_before.copy(stack=False)
-#         b_accept.push(mv)
-#         accept_fen = b_accept.fen()
-
-#         # Analyze accept position
-#         post = analyze_or_fail(accept_fen, depth, 1, engine)
-#         score_accept = post[0]["score"]
-
-#         side_after_accept = "w" if b_accept.turn == chess.WHITE else "b"
-#         eval_accept_white = eval_for_white(score_accept, side_after_accept)
-
-#         # Choose the accept line that is best for the *mover*
-#         mover_eval = cp_for_player(eval_accept_white, mover_color)
-#         if best_eval_white is None:
-#             best_eval_white = eval_accept_white
-#             best_eval_mover = mover_eval
-#         else:
-#             if mover_eval > best_eval_mover:
-#                 best_eval_white = eval_accept_white
-#                 best_eval_mover = mover_eval
-
-#     return best_eval_white
-
-
-
 @app.post("/evaluate")
 async def evaluate_move(
     fen: str = Form(...),
@@ -1000,35 +917,7 @@ async def evaluate_move(
             mate_flip_severity = 6400 + 100 * ((best_mate_in or 0) + (played_mate_in or 0))
 
 
-        # is_miss = detect_miss(
-        #     eval_pre_white=eval_before_cp,              # best-line eval from PRE
-        #     eval_after_white=eval_after_cp,            # eval after move
-        #     eval_played_pre_white=played_eval_from_pre,# your move's eval from PRE
-        #     eval_best_pre_white=best_eval_from_pre,    # best move eval from PRE
-        #     mover_color=side_before,
-        #     best_mate_in_plies=best_mate_in,
-        #     played_mate_in_plies=played_mate_in,
-        #     best_material_gain_cp=best_material_gain_cp,
-        #     played_material_gain_cp=played_material_gain_cp,
-        # )
 
-        # is_miss = detect_miss(
-        #     eval_pre_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_played_pre_white=played_eval_from_pre,
-        #     eval_best_pre_white=best_eval_from_pre,
-        #     mover_color=side_before,
-        #     best_mate_in_plies=best_mate_in,
-        #     played_mate_in_plies=played_mate_in,
-        #     best_material_gain_cp=best_material_gain_cp,
-        #     played_material_gain_cp=played_material_gain_cp,
-        #     board=board_before,
-        #     move=uci_move_obj,
-        # )
-
-
-
-        # print("Miss detected:", is_miss)
 
             # --- Advanced Miss detection (returns MissResult) ---
         miss_result = detect_miss(
@@ -1062,41 +951,6 @@ async def evaluate_move(
         played_move_obj = chess.Move.from_uci(move)
 
 
-        # --- Eval if we had accepted the sacrifice (for MissedAcceptSac) ---
-        # eval_accept_white = None
-
-        # # Here we are *assuming* this move is the side responding to a sac.
-        # # In a full game pipeline, you'd instead pass the opponent's sac_result/target.
-        # if sac_result.is_real_sacrifice:
-        #     # For "missed accept", we actually want: position AFTER opponent's sac,
-        #     # BEFORE our move. In this API we only have one move at a time, so
-        #     # this is just a template for your full game analyzer.
-        #     eval_accept_white = eval_best_accept_line_white(
-        #         board_before=board_before,
-        #         sac_target_square=sac_target_square,
-        #         mover_color=side_before,
-        #         depth=depth,
-        #         engine=persistent_engine,
-        #     )
-
-
-
-
-        # miss_accept_result = detect_missed_accept_sacrifice(
-        #     last_sac_result=is_sacrifice,
-        #     sac_target_square=sac_target_square,
-        #     board_before=board_before,
-        #     played_move=played_move_obj,
-        #     eval_pre_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_accept_white=eval_accept_white,  # eval if we had captured
-        #     mover_color=side_before,
-        # )
-
-        # is_miss_accept_sac = miss_accept_result.is_miss
-
-
-
         # --- Book detection (custom opening DB) ---
 
         book_for_move = is_book_move(fen_before, move)  # move is UCI string
@@ -1123,19 +977,6 @@ async def evaluate_move(
 
         # --- NEW Great move detection (non-sacrifice, big delta_eval, no CP loss) ---
 
-        # great_info = detect_great_move(
-        #     eval_before_white=eval_before_cp,
-        #     eval_after_white=eval_after_cp,
-        #     eval_best_pre_white=best_eval_from_pre,
-        #     eval_played_pre_white=played_eval_from_pre,
-        #     mover_color=side_before,
-        #     multipv_rank=multipv_rank,   # ← IMPORTANT
-        #     best_move_uci=best_move["uci"]
-        #     best_line_material_gain_cp=best_line_gain
-        #     move=actual_move
-        #     board_before=board_before
-
-        # )
 
         great_info = detect_great_move(
             eval_before_white=eval_before_cp,
