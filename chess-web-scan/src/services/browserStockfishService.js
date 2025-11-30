@@ -354,6 +354,49 @@ class BrowserStockfishService {
   }
 
   /**
+   * Change thread count dynamically
+   */
+  async setThreads(count) {
+    const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+
+    if (!hasSharedArrayBuffer) {
+      console.warn('Cannot change threads - running in single-threaded mode');
+      return false;
+    }
+
+    if (!this.initialized || !this.engine) {
+      console.warn('Cannot change threads - engine not initialized');
+      return false;
+    }
+
+    // Validate thread count
+    const maxThreads = Math.min(navigator.hardwareConcurrency || 4, 6);
+    const newThreads = Math.max(1, Math.min(count, maxThreads));
+
+    if (newThreads === this.actualThreads) {
+      console.log(`Already using ${newThreads} thread(s)`);
+      return true;
+    }
+
+    try {
+      console.log(`🔧 Changing threads: ${this.actualThreads} → ${newThreads}`);
+
+      // Send UCI command to change threads
+      this.engine.setOption('Threads', String(newThreads));
+      await this._waitForReady();
+
+      // Update stored thread count
+      this.actualThreads = newThreads;
+
+      console.log(`✅ Now using ${newThreads} thread(s)`);
+      return true;
+    } catch (error) {
+      console.error('Failed to change thread count:', error);
+      return false;
+    }
+  }
+
+  /**
    * Quit Stockfish
    */
   quit() {

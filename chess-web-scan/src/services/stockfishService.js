@@ -170,8 +170,7 @@ class StockfishService {
    * Change thread count
    */
   async setThreads(count) {
-    console.log(`Thread count managed by browser engine`);
-    return true;
+    return await this.browserEngine.setThreads(count);
   }
 
   /**
