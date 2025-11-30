@@ -17,11 +17,11 @@ import {
  *
  * @param {string} fen - FEN string BEFORE the move
  * @param {string} move - UCI move string (e.g., "e2e4")
- * @param {number} depth - Search depth (default: 18)
+ * @param {number} depth - Search depth (default: 15 for browser)
  * @param {number} multipv - Number of lines (default: 5)
  * @returns {Promise<Object>} Complete evaluation with classification
  */
-export async function evaluateMove(fen, move, depth = 18, multipv = 5) {
+export async function evaluateMove(fen, move, depth = 15, multipv = 5) {
   try {
     const result = await browserEvaluateMove(fen, move, depth, multipv);
 

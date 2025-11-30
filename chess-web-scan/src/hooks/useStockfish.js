@@ -86,7 +86,7 @@ export function useStockfish() {
    *
    * @param {string} fen - FEN string of the position to analyze
    * @param {Object} options - Analysis options
-   * @param {number} options.depth - Search depth (default: 18)
+   * @param {number} options.depth - Search depth (default: 15 for browser)
    * @param {number} options.multiPV - Number of lines to analyze (default: 3)
    * @returns {Promise<Object>} Analysis result with evaluation, lines, and bestMove
    *
@@ -112,7 +112,7 @@ export function useStockfish() {
       throw new Error('Browser engine not initialized');
     }
 
-    const { depth = 18, multiPV = 3 } = options;
+    const { depth = 15, multiPV = 3 } = options;
 
     setAnalyzing(true);
     setError(null);

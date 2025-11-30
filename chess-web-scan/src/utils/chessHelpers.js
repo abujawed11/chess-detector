@@ -121,25 +121,33 @@ export function materialBalanceForSide(board, sideChar) {
  */
 export function materialGainForMove(board, uciMove) {
   try {
+    // Create a copy to avoid modifying the original board
+    const tempBoard = new Chess(board.fen());
+
     // Convert UCI to chess.js move format
     const from = uciMove.substring(0, 2);
     const to = uciMove.substring(2, 4);
     const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
 
     // Get the piece at destination (if any)
-    const capturedPiece = board.get(to);
+    const capturedPiece = tempBoard.get(to);
 
     if (!capturedPiece) {
-      // Check for en passant
-      const move = board.move({ from, to, promotion });
-      if (move && move.flags.includes('e')) {
-        board.undo();
-        return PIECE_VALUES.p; // Captured a pawn
+      // Check for en passant by trying the move
+      const move = tempBoard.move({ from, to, promotion });
+      if (move) {
+        // Check if it was en passant
+        if (move.flags.includes('e')) {
+          return PIECE_VALUES.p; // Captured a pawn via en passant
+        }
+        // No capture
+        return 0;
       }
-      if (move) board.undo();
+      // Illegal move
       return 0;
     }
 
+    // Simple capture - return the captured piece value
     return PIECE_VALUES[capturedPiece.type] || 0;
   } catch (e) {
     console.error('Error calculating material gain:', e);

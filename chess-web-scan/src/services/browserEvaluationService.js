@@ -73,7 +73,8 @@ function playedRankAndGap(uciMove, pvs, sideToMove) {
     }
   }
 
-  console.warn(`Move '${uciMoveNormalized}' not found in any PV`);
+  // Move not in top PVs - normal for mistakes/blunders
+  console.log(`Move '${uciMoveNormalized}' not in top ${K} lines (ranked ${K + 1}+)`);
   return [K + 1, null, null, bestEvalCp];
 }
 
@@ -95,7 +96,7 @@ async function analyzeOrFail(fen, depth, multipv, engine) {
       const result = await engine.analyzePosition({ depth: d, multiPV: k });
       if (result.lines && result.lines.length > 0) {
         if (i > 0) {
-          console.warn(`⚠️ FALLBACK: Used depth=${d} instead of ${depth} for FEN: ${fen.substring(0, 40)}...`);
+          console.log(`ℹ️ Depth reduced to ${d} (from ${depth}) for complex position`);
         }
         return result.lines;
       }
@@ -129,11 +130,11 @@ function matePly(scoreDict) {
  *
  * @param {string} fen - FEN string BEFORE the move
  * @param {string} move - UCI move string
- * @param {number} depth - Search depth (default: 18)
+ * @param {number} depth - Search depth (default: 15 for browser)
  * @param {number} multipv - Number of lines (default: 5)
  * @returns {Promise<Object>} Complete evaluation with classification
  */
-export async function evaluateMove(fen, move, depth = 18, multipv = 5) {
+export async function evaluateMove(fen, move, depth = 15, multipv = 5) {
   try {
     const engine = getBrowserStockfish();
 

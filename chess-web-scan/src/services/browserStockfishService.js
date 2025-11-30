@@ -134,13 +134,13 @@ class BrowserStockfishService {
   /**
    * Analyze position - returns multipv lines with score info
    * @param {Object} options - Analysis options
-   * @param {number} options.depth - Search depth (default: 18)
+   * @param {number} options.depth - Search depth (default: 15 for browser)
    * @param {number} options.multiPV - Number of lines to analyze (default: 3)
    * @returns {Promise} Resolves with analysis results
    */
   async analyzePosition(options = {}) {
     const {
-      depth = 18,
+      depth = 15,
       multiPV = 3,
       onUpdate = null
     } = options;
@@ -230,16 +230,21 @@ class BrowserStockfishService {
       console.log(`📊 Starting depth-based search: depth ${depth}`);
       this.engine.goDepth(depth);
 
-      // Timeout
-      const timeout = depth * 5000;
+      // Timeout - much longer for single-threaded mode
+      const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+      const baseTimeout = hasSharedArrayBuffer ? depth * 5000 : depth * 15000; // 3x longer for single-threaded
+      const timeout = baseTimeout + 20000; // Extra 20s buffer
+
+      console.log(`⏳ Timeout set to ${(timeout / 1000).toFixed(1)}s (${hasSharedArrayBuffer ? 'multi' : 'single'}-threaded)`);
+
       setTimeout(() => {
         if (this.analyzing) {
-          console.error(`❌ Browser analysis TIMEOUT`);
+          console.error(`❌ Browser analysis TIMEOUT after ${(timeout / 1000).toFixed(1)}s`);
           this.stop();
           unsubscribe();
           reject(new Error('Analysis timeout'));
         }
-      }, timeout + 10000);
+      }, timeout);
     });
   }
 
@@ -298,7 +303,7 @@ class BrowserStockfishService {
   /**
    * Get best move for current position
    */
-  async getBestMove(fen, depth = 18) {
+  async getBestMove(fen, depth = 15) {
     this.setPosition(fen);
     const result = await this.analyzePosition({ depth, multiPV: 1 });
     return result.bestMove;
@@ -307,7 +312,7 @@ class BrowserStockfishService {
   /**
    * Get evaluation for current position
    */
-  async getEvaluation(fen, depth = 18) {
+  async getEvaluation(fen, depth = 15) {
     this.setPosition(fen);
     const result = await this.analyzePosition({ depth, multiPV: 1 });
     return result.evaluation;
@@ -316,7 +321,7 @@ class BrowserStockfishService {
   /**
    * Get top N moves with evaluations
    */
-  async getTopMoves(fen, n = 3, depth = 18) {
+  async getTopMoves(fen, n = 3, depth = 15) {
     this.setPosition(fen);
     const result = await this.analyzePosition({ depth, multiPV: n });
     return result.lines;
