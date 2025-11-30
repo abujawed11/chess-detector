@@ -134,13 +134,18 @@ export function materialGainForMove(board, uciMove) {
 
     if (!capturedPiece) {
       // Check for en passant by trying the move
-      const move = tempBoard.move({ from, to, promotion });
-      if (move) {
-        // Check if it was en passant
-        if (move.flags.includes('e')) {
-          return PIECE_VALUES.p; // Captured a pawn via en passant
+      try {
+        const move = tempBoard.move({ from, to, promotion });
+        if (move) {
+          // Check if it was en passant
+          if (move.flags.includes('e')) {
+            return PIECE_VALUES.p; // Captured a pawn via en passant
+          }
+          // No capture
+          return 0;
         }
-        // No capture
+      } catch (moveError) {
+        // Illegal move - this is normal for engine lines in different positions
         return 0;
       }
       // Illegal move
@@ -150,7 +155,7 @@ export function materialGainForMove(board, uciMove) {
     // Simple capture - return the captured piece value
     return PIECE_VALUES[capturedPiece.type] || 0;
   } catch (e) {
-    console.error('Error calculating material gain:', e);
+    // Silently return 0 for any errors (likely illegal moves)
     return 0;
   }
 }
