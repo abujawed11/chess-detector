@@ -39,14 +39,14 @@ export class StockfishClient {
       messageCounter++;
 
       // Log UCI protocol messages
-      if (msg.includes('uciok') || msg.includes('readyok') || msg.startsWith('bestmove')) {
-        console.log('📥 Engine response:', msg);
-      }
+      // if (msg.includes('uciok') || msg.includes('readyok') || msg.startsWith('bestmove')) {
+      //   console.log('📥 Engine response:', msg);
+      // }
 
-      // Log info messages (every 5th one to avoid spam)
-      if (msg.startsWith('info') && messageCounter % 5 === 0) {
-        console.log('📥 Analysis info #' + messageCounter + ':', msg.substring(0, 80) + '...');
-      }
+      // // Log info messages (every 5th one to avoid spam)
+      // if (msg.startsWith('info') && messageCounter % 5 === 0) {
+      //   console.log('📥 Analysis info #' + messageCounter + ':', msg.substring(0, 80) + '...');
+      // }
 
       // Forward every line to listeners
       for (const fn of this._listeners) fn(msg);

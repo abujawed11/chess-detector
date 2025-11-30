@@ -1,0 +1,13 @@
+# Netlify configuration for browser-based Stockfish
+# These headers are required for SharedArrayBuffer support
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
+# Build settings
+[build]
+  publish = "dist"
+  command = "npm run build"
