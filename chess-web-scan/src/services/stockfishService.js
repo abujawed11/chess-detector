@@ -15,11 +15,19 @@ class StockfishService {
     this.isReady = false;
     this.analyzing = false;
     this._initPromise = null;
+  }
 
-    // Browser manages threading
-    this.currentThreads = navigator.hardwareConcurrency || 4;
-    this.maxAvailableThreads = Math.min(this.currentThreads, 6);
-    this.supportsMultiThreading = true;
+  // Delegate thread info to browser engine
+  get currentThreads() {
+    return this.browserEngine.getThreadInfo?.().current || 1;
+  }
+
+  get maxAvailableThreads() {
+    return this.browserEngine.getThreadInfo?.().max || 1;
+  }
+
+  get supportsMultiThreading() {
+    return this.browserEngine.getThreadInfo?.().supportsMultiThreading || false;
   }
 
   /**

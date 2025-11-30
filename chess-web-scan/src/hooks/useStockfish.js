@@ -47,9 +47,10 @@ export function useStockfish() {
 
         setInitialized(true);
         setError(null);
-        console.log('✅ Browser Stockfish initialized successfully');
-        console.log(`  🧵 Threads: ${engine.currentThreads}`);
-        console.log(`  💾 Running in browser (WASM)`);
+
+        // Service already logged initialization details, just confirm here
+        const threadInfo = engine.getThreadInfo();
+        console.log(`📊 Hook: Engine ready with ${threadInfo.current} thread(s)`);
       } catch (err) {
         if (!mounted) return;
         const errorMsg = err.message || 'Failed to initialize browser engine';

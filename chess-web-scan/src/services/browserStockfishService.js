@@ -12,6 +12,7 @@ class BrowserStockfishService {
     this.initialized = false;
     this.isReady = false;
     this.analyzing = false;
+    this.actualThreads = 1; // Will be set during initialization
   }
 
   /**
@@ -78,6 +79,9 @@ class BrowserStockfishService {
         this.engine.setOption('Threads', String(maxThreads));
         await this._waitForReady();
       }
+
+      // Store actual thread count
+      this.actualThreads = maxThreads;
 
       // Set hash table size (256MB for multi-threaded, 128MB for single-threaded)
       const hashSize = hasSharedArrayBuffer ? '256' : '128';
@@ -335,6 +339,18 @@ class BrowserStockfishService {
       this.engine.stop();
       this.analyzing = false;
     }
+  }
+
+  /**
+   * Get thread information
+   */
+  getThreadInfo() {
+    const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+    return {
+      current: this.actualThreads,
+      max: hasSharedArrayBuffer ? Math.min(navigator.hardwareConcurrency || 4, 6) : 1,
+      supportsMultiThreading: hasSharedArrayBuffer
+    };
   }
 
   /**
