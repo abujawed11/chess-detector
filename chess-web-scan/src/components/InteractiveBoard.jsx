@@ -231,14 +231,14 @@ export default function InteractiveBoard({
             background: isSelected
               ? boardColors.selected
               : isLastMoveSquare
-              ? (isLight ? boardColors.lastMoveLight : boardColors.lastMoveDark)
-              : isHighlighted
-              ? boardColors.highlight
-              : isHovered && dragFrom
-              ? boardColors.hover
-              : isLight
-              ? boardColors.light
-              : boardColors.dark,
+                ? (isLight ? boardColors.lastMoveLight : boardColors.lastMoveDark)
+                : isHighlighted
+                  ? boardColors.highlight
+                  : isHovered && dragFrom
+                    ? boardColors.hover
+                    : isLight
+                      ? boardColors.light
+                      : boardColors.dark,
             cursor: piece && piece.color === chess.turn() ? 'pointer' : 'default',
             opacity: isDragging ? 0.5 : 1,
             transition: 'background 0.2s'
@@ -330,292 +330,849 @@ export default function InteractiveBoard({
     }
   }
 
-  // Parse and draw arrow for hover move (blue/purple)
+
+  // Common arrow renderer (constant geometry)
+  // Common arrow renderer: constant width, solid rectangular tail + triangle head
+  // const renderArrowCommon = (
+  //   move,
+  //   {
+  //     gradientId,
+  //     startColor,
+  //     endColor,
+  //     outlineColor,
+  //     pulse = false,
+  //     pulseColor = '#22c55e',
+  //     zIndex = 10,
+  //   }
+  // ) => {
+  //   if (!move || move.length < 4) return null;
+
+  //   const from = move.substring(0, 2);
+  //   const to = move.substring(2, 4);
+
+  //   const fromCoords = squareToCoords(from);
+  //   const toCoords = squareToCoords(to);
+
+  //   const dx = toCoords.x - fromCoords.x;
+  //   const dy = toCoords.y - fromCoords.y;
+  //   const length = Math.sqrt(dx * dx + dy * dy);
+  //   if (length === 0) return null;
+
+  //   const dirX = dx / length;
+  //   const dirY = dy / length;
+
+  //   // Geometry based on one square -> constant look
+  //   const squareSize = GRID_SIZE / 8;
+  //   // const tailWidth = squareSize * 0.22;       // visual thickness of arrow
+  //   // const headLength = squareSize * 0.6;
+  //   // const headWidth = squareSize * 0.6;
+
+  //   // const halfTailWidth = tailWidth / 2;
+
+  //   // // We start the body slightly inside the from-square,
+  //   // // and end it just before the head.
+  //   // const startOffset = squareSize * 0.25;     // how far from from-square center
+  //   // const endOffset   = headLength + squareSize * 0.15;
+
+  //   // const bodyStartX = fromCoords.x + dirX * startOffset;
+  //   // const bodyStartY = fromCoords.y + dirY * startOffset;
+
+  //   // const bodyEndX = toCoords.x - dirX * endOffset;
+  //   // const bodyEndY = toCoords.y - dirY * endOffset;
+
+  //   const tailWidth = squareSize * 0.15;
+  //   const headLength = squareSize * 0.35;
+  //   const headWidth = squareSize * 0.45;
+
+  //   const halfTailWidth = tailWidth / 2;
+
+  //   const startOffset = squareSize * 0.25;
+
+  //   const bodyStartX = fromCoords.x + dirX * startOffset;
+  //   const bodyStartY = fromCoords.y + dirY * startOffset;
+
+  //   // head base (where triangle starts)
+  //   const headBaseX = toCoords.x - dirX * headLength;
+  //   const headBaseY = toCoords.y - dirY * headLength;
+
+  //   // tail should end exactly at head base -> no gap
+  //   const bodyEndX = headBaseX;
+  //   const bodyEndY = headBaseY;
+
+
+  //   // Perpendicular unit vector
+  //   const perpX = -dirY;
+  //   const perpY = dirX;
+
+  //   // Body rectangle corners
+  //   const bodyP1X = bodyStartX + perpX * halfTailWidth;
+  //   const bodyP1Y = bodyStartY + perpY * halfTailWidth;
+
+  //   const bodyP2X = bodyEndX + perpX * halfTailWidth;
+  //   const bodyP2Y = bodyEndY + perpY * halfTailWidth;
+
+  //   const bodyP3X = bodyEndX - perpX * halfTailWidth;
+  //   const bodyP3Y = bodyEndY - perpY * halfTailWidth;
+
+  //   const bodyP4X = bodyStartX - perpX * halfTailWidth;
+  //   const bodyP4Y = bodyStartY - perpY * halfTailWidth;
+
+  //   // Arrow head
+  //   const tipX = toCoords.x;
+  //   const tipY = toCoords.y;
+
+  //   // const headBaseX = tipX - dirX * headLength;
+  //   // const headBaseY = tipY - dirY * headLength;
+
+  //   const headHalfWidth = headWidth / 2;
+
+  //   const headP1X = headBaseX + perpX * headHalfWidth;
+  //   const headP1Y = headBaseY + perpY * headHalfWidth;
+
+  //   const headP2X = headBaseX - perpX * headHalfWidth;
+  //   const headP2Y = headBaseY - perpY * headHalfWidth;
+
+  //   return (
+  //     <svg
+  //       style={{
+  //         position: 'absolute',
+  //         top: 0,
+  //         left: 0,
+  //         width: GRID_SIZE,
+  //         height: GRID_SIZE,
+  //         pointerEvents: 'none',
+  //         zIndex,
+  //       }}
+  //     >
+  //       <defs>
+  //         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+  //           <stop offset="0%" style={{ stopColor: startColor, stopOpacity: 1 }} />
+  //           <stop offset="100%" style={{ stopColor: endColor, stopOpacity: 1 }} />
+  //         </linearGradient>
+  //       </defs>
+
+  //       {/* Tail: long rectangle */}
+  //       <polygon
+  //         points={`
+  //         ${bodyP1X},${bodyP1Y}
+  //         ${bodyP2X},${bodyP2Y}
+  //         ${bodyP3X},${bodyP3Y}
+  //         ${bodyP4X},${bodyP4Y}
+  //       `}
+  //         fill={`url(#${gradientId})`}
+  //         opacity="0.96"
+  //       />
+
+  //       {/* Head: triangle */}
+  //       <polygon
+  //         points={`
+  //         ${tipX},${tipY}
+  //         ${headP1X},${headP1Y}
+  //         ${headP2X},${headP2Y}
+  //       `}
+  //         fill={`url(#${gradientId})`}
+  //         stroke={outlineColor}
+  //         strokeWidth="2"
+  //         strokeLinejoin="round"
+  //         opacity="0.96"
+  //       />
+
+  //       {/* Optional pulse at origin */}
+  //       {pulse && (
+  //         <circle
+  //           cx={fromCoords.x}
+  //           cy={fromCoords.y}
+  //           r="14"
+  //           fill="none"
+  //           stroke={pulseColor}
+  //           strokeWidth="3"
+  //           opacity="0.7"
+  //         >
+  //           <animate
+  //             attributeName="r"
+  //             from="10"
+  //             to="30"
+  //             dur="1.4s"
+  //             repeatCount="indefinite"
+  //           />
+  //           <animate
+  //             attributeName="opacity"
+  //             from="0.8"
+  //             to="0"
+  //             dur="1.4s"
+  //             repeatCount="indefinite"
+  //           />
+  //         </circle>
+  //       )}
+  //     </svg>
+  //   );
+  // };
+
+
+
+  // ===============================================
+  //   UNIVERSAL ARROW RENDERER (CONFIGURABLE)
+  // ===============================================
+
+  const renderArrowCommon = (
+    move,
+    {
+      gradientId,
+      startColor,
+      endColor,
+      outlineColor,
+      pulse = false,
+      pulseColor = '#22c55e',
+      zIndex = 10,
+
+      // OPTIONAL orientation-based calibration
+      globalShiftX = 0,   // <- absolute left/right shift (in px)
+      globalShiftY = 0,   // <- absolute up/down shift (in px)
+    }
+  ) => {
+    if (!move || move.length < 4) return null;
+
+    const from = move.substring(0, 2);
+    const to = move.substring(2, 4);
+
+    const fromCoords = squareToCoords(from);
+    const toCoords = squareToCoords(to);
+
+    const dx = toCoords.x - fromCoords.x;
+    const dy = toCoords.y - fromCoords.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) return null;
+
+    const dirX = dx / length;
+    const dirY = dy / length;
+
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    // ==========================
+    // 🔧 TUNABLE PARAMETERS
+    // ==========================
+    const squareSize = GRID_SIZE / 8;
+
+    const tailWidth = squareSize * 0.16;  // thickness of shaft
+    const headLength = squareSize * 0.35;  // head length
+    const headWidth = squareSize * 0.35;  // head width
+
+    const tipInset = squareSize * 0.18;  // pull tip back from piece
+    const sideShift = 0;                  // shift perpendicular to arrow (see below)
+    const startOffset = squareSize * 0.25;  // how far inside from-square we start
+    // ==========================
+
+    const halfTailWidth = tailWidth / 2;
+
+    // Perpendicular shift (depends on arrow direction)
+    const sideShiftX = perpX * sideShift;
+    const sideShiftY = perpY * sideShift;
+
+    // Total shift = perpendicular + absolute screen calibration
+    const shiftX = sideShiftX + globalShiftX;
+    const shiftY = sideShiftY + globalShiftY;
+
+    // TIP (end point) – pulled back a bit
+    const tipX = toCoords.x - dirX * tipInset + shiftX;
+    const tipY = toCoords.y - dirY * tipInset + shiftY;
+
+    // Base of arrow head
+    const headBaseX = tipX - dirX * headLength;
+    const headBaseY = tipY - dirY * headLength;
+
+    // Tail start (inside from-square)
+    const bodyStartX = fromCoords.x + dirX * startOffset + shiftX;
+    const bodyStartY = fromCoords.y + dirY * startOffset + shiftY;
+
+    // Tail end = head base
+    const bodyEndX = headBaseX;
+    const bodyEndY = headBaseY;
+
+    // Tail rectangle
+    const bodyP1X = bodyStartX + perpX * halfTailWidth;
+    const bodyP1Y = bodyStartY + perpY * halfTailWidth;
+
+    const bodyP2X = bodyEndX + perpX * halfTailWidth;
+    const bodyP2Y = bodyEndY + perpY * halfTailWidth;
+
+    const bodyP3X = bodyEndX - perpX * halfTailWidth;
+    const bodyP3Y = bodyEndY - perpY * halfTailWidth;
+
+    const bodyP4X = bodyStartX - perpX * halfTailWidth;
+    const bodyP4Y = bodyStartY - perpY * halfTailWidth;
+
+    // Head triangle
+    const headHalfWidth = headWidth / 2;
+
+    const headP1X = headBaseX + perpX * headHalfWidth;
+    const headP1Y = headBaseY + perpY * headHalfWidth;
+
+    const headP2X = headBaseX - perpX * headHalfWidth;
+    const headP2Y = headBaseY - perpY * headHalfWidth;
+
+    return (
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: GRID_SIZE,
+          height: GRID_SIZE,
+          pointerEvents: 'none',
+          zIndex,
+        }}
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style={{ stopColor: startColor, stopOpacity: 1 }} />
+            <stop offset="100%" style={{ stopColor: endColor, stopOpacity: 1 }} />
+          </linearGradient>
+        </defs>
+
+        {/* Tail */}
+        <polygon
+          points={`
+          ${bodyP1X},${bodyP1Y}
+          ${bodyP2X},${bodyP2Y}
+          ${bodyP3X},${bodyP3Y}
+          ${bodyP4X},${bodyP4Y}
+        `}
+          fill={`url(#${gradientId})`}
+          opacity="0.96"
+        />
+
+        {/* Head */}
+        <polygon
+          points={`
+          ${tipX},${tipY}
+          ${headP1X},${headP1Y}
+          ${headP2X},${headP2Y}
+        `}
+          fill={`url(#${gradientId})`}
+          stroke={outlineColor}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          opacity="0.96"
+        />
+
+        {pulse && (
+          <circle
+            cx={fromCoords.x + globalShiftX}
+            cy={fromCoords.y + globalShiftY}
+            r="14"
+            fill="none"
+            stroke={pulseColor}
+            strokeWidth="3"
+            opacity="0.7"
+          >
+            <animate attributeName="r" from="10" to="30" dur="1.4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.8" to="0" dur="1.4s" repeatCount="indefinite" />
+          </circle>
+        )}
+      </svg>
+    );
+  };
+
+
+
+
+
+  // const renderArrowCommon = (
+  //   move,
+  //   {
+  //     gradientId,
+  //     startColor,
+  //     endColor,
+  //     outlineColor,
+  //     pulse = false,
+  //     pulseColor = '#22c55e',
+  //     zIndex = 10,
+  //   }
+  // ) => {
+  //   if (!move || move.length < 4) return null;
+
+  //   // Extract squares
+  //   const from = move.substring(0, 2);
+  //   const to = move.substring(2, 4);
+
+  //   const fromCoords = squareToCoords(from);
+  //   const toCoords = squareToCoords(to);
+
+  //   // Direction vectors
+  //   const dx = toCoords.x - fromCoords.x;
+  //   const dy = toCoords.y - fromCoords.y;
+  //   const length = Math.sqrt(dx * dx + dy * dy);
+  //   if (length === 0) return null;
+
+  //   const dirX = dx / length;
+  //   const dirY = dy / length;
+
+  //   // Perpendicular vector for left/right shift
+  //   const perpX = -dirY;
+  //   const perpY = dirX;
+
+  //   // ===============================================
+  //   //            🔧  USER TUNABLE PARAMETERS
+  //   // ===============================================
+
+  //   const squareSize = GRID_SIZE / 8;
+
+  //   // Arrow body thickness
+  //   const tailWidth = squareSize * 0.16;   // <-- make smaller for thinner arrow
+
+  //   // Arrow head dimensions
+  //   const headLength = squareSize * 0.3;   // <-- shorten head (length)
+  //   const headWidth = squareSize * 0.35;   // <-- narrow/widen head
+
+  //   // Pull arrow tip back from the target square
+  //   const tipInset = squareSize * 0.25;   // <-- increase to avoid covering piece
+
+  //   // Move entire arrow sideways
+  //   const sideShift = 7;                   // <-- +/- to shift left/right
+
+  //   // How far inside the FROM square the arrow begins
+  //   const startOffset = squareSize * 0.25;
+
+  //   // ===============================================
+  //   //               END TUNABLE PARAMETERS
+  //   // ===============================================
+
+  //   const halfTailWidth = tailWidth / 2;
+
+  //   // Apply sideways shift
+  //   const shiftX = perpX * sideShift;
+  //   const shiftY = perpY * sideShift;
+
+  //   // --- TIP (end of arrow) ---
+  //   const tipX = toCoords.x - dirX * tipInset + shiftX;
+  //   const tipY = toCoords.y - dirY * tipInset + shiftY;
+
+  //   // --- BASE OF ARROW HEAD (triangle base) ---
+  //   const headBaseX = tipX - dirX * headLength;
+  //   const headBaseY = tipY - dirY * headLength;
+
+  //   // --- TAIL START ---
+  //   const bodyStartX = fromCoords.x + dirX * startOffset + shiftX;
+  //   const bodyStartY = fromCoords.y + dirY * startOffset + shiftY;
+
+  //   // --- TAIL END = head base ---
+  //   const bodyEndX = headBaseX;
+  //   const bodyEndY = headBaseY;
+
+  //   // --- RECTANGLE CORNERS FOR TAIL ---
+  //   const bodyP1X = bodyStartX + perpX * halfTailWidth;
+  //   const bodyP1Y = bodyStartY + perpY * halfTailWidth;
+
+  //   const bodyP2X = bodyEndX + perpX * halfTailWidth;
+  //   const bodyP2Y = bodyEndY + perpY * halfTailWidth;
+
+  //   const bodyP3X = bodyEndX - perpX * halfTailWidth;
+  //   const bodyP3Y = bodyEndY - perpY * halfTailWidth;
+
+  //   const bodyP4X = bodyStartX - perpX * halfTailWidth;
+  //   const bodyP4Y = bodyStartY - perpY * halfTailWidth;
+
+  //   // --- HEAD TRIANGLE ---
+  //   const headHalfWidth = headWidth / 2;
+
+  //   const headP1X = headBaseX + perpX * headHalfWidth + 0;
+  //   const headP1Y = headBaseY + perpY * headHalfWidth + 0;
+
+  //   const headP2X = headBaseX - perpX * headHalfWidth + 0;
+  //   const headP2Y = headBaseY - perpY * headHalfWidth + 0;
+
+  //   // ===============================================
+  //   //                     SVG
+  //   // ===============================================
+
+  //   return (
+  //     <svg
+  //       style={{
+  //         position: 'absolute',
+  //         top: 0,
+  //         left: 0,
+  //         width: GRID_SIZE,
+  //         height: GRID_SIZE,
+  //         pointerEvents: 'none',
+  //         zIndex,
+  //       }}
+  //     >
+  //       <defs>
+  //         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+  //           <stop offset="0%" style={{ stopColor: startColor, stopOpacity: 1 }} />
+  //           <stop offset="100%" style={{ stopColor: endColor, stopOpacity: 1 }} />
+  //         </linearGradient>
+  //       </defs>
+
+  //       {/* Tail Rectangle */}
+  //       <polygon
+  //         points={`
+  //         ${bodyP1X},${bodyP1Y}
+  //         ${bodyP2X},${bodyP2Y}
+  //         ${bodyP3X},${bodyP3Y}
+  //         ${bodyP4X},${bodyP4Y}
+  //       `}
+  //         fill={`url(#${gradientId})`}
+  //         opacity="0.96"
+  //       />
+
+  //       {/* Triangle Head */}
+  //       <polygon
+  //         points={`
+  //         ${tipX},${tipY}
+  //         ${headP1X},${headP1Y}
+  //         ${headP2X},${headP2Y}
+  //       `}
+  //         fill={`url(#${gradientId})`}
+  //         stroke={outlineColor}
+  //         strokeWidth="2"
+  //         strokeLinejoin="round"
+  //         opacity="0.96"
+  //       />
+
+  //       {/* Optional pulse */}
+  //       {pulse && (
+  //         <circle
+  //           cx={fromCoords.x}
+  //           cy={fromCoords.y}
+  //           r="14"
+  //           fill="none"
+  //           stroke={pulseColor}
+  //           strokeWidth="3"
+  //           opacity="0.7"
+  //         >
+  //           <animate attributeName="r" from="10" to="30" dur="1.4s" repeatCount="indefinite" />
+  //           <animate attributeName="opacity" from="0.8" to="0" dur="1.4s" repeatCount="indefinite" />
+  //         </circle>
+  //       )}
+  //     </svg>
+  //   );
+  // };
+
+
+
+
+
+
+  const renderArrow = () => {
+    if (!bestMove || bestMove.length < 4) return null;
+
+    return renderArrowCommon(bestMove, {
+      gradientId: 'bestMoveArrowGradient',
+      startColor: '#15803d',
+      endColor: '#16a34a',
+      outlineColor: '#14532d',
+      pulse: true,
+      pulseColor: '#22c55e',
+      zIndex: 12,
+      globalShiftX: 5,
+      globalShiftY: 10,
+    });
+  };
+
+
+
   const renderHoverArrow = () => {
     if (!hoverMove || hoverMove.length < 4) return null;
 
-    const from = hoverMove.substring(0, 2);
-    const to = hoverMove.substring(2, 4);
+    return renderArrowCommon(hoverMove, {
+      gradientId: 'hoverArrowGradient',
+      startColor: '#6366f1',
+      endColor: '#8b5cf6',
+      outlineColor: '#4c1d95',
 
-    const fromCoords = squareToCoords(from);
-    const toCoords = squareToCoords(to);
-
-    // Calculate arrow direction
-    const dx = toCoords.x - fromCoords.x;
-    const dy = toCoords.y - fromCoords.y;
-    const angle = Math.atan2(dy, dx);
-
-    // Shorten arrow to not overlap pieces much
-    const shortenStart = 20;
-    const shortenEnd = 15;
-    const arrowStartX = fromCoords.x + Math.cos(angle) * shortenStart;
-    const arrowStartY = fromCoords.y + Math.sin(angle) * shortenStart;
-    const arrowEndX = toCoords.x - Math.cos(angle) * shortenEnd;
-    const arrowEndY = toCoords.y - Math.sin(angle) * shortenEnd;
-
-    // Create a smooth arrowhead triangle
-    const headLength = 28;
-    const headWidth = 24;
-
-    // Calculate perpendicular vector for arrowhead width
-    const perpAngle = angle + Math.PI / 2;
-    const halfWidth = headWidth / 2;
-
-    // Arrowhead triangle points
-    const tipX = arrowEndX;
-    const tipY = arrowEndY;
-
-    const baseX = arrowEndX - Math.cos(angle) * headLength;
-    const baseY = arrowEndY - Math.sin(angle) * headLength;
-
-    const base1X = baseX + Math.cos(perpAngle) * halfWidth;
-    const base1Y = baseY + Math.sin(perpAngle) * halfWidth;
-    const base2X = baseX - Math.cos(perpAngle) * halfWidth;
-    const base2Y = baseY - Math.sin(perpAngle) * halfWidth;
-
-    return (
-      <svg
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: GRID_SIZE,
-          height: GRID_SIZE,
-          pointerEvents: 'none',
-          zIndex: 9
-        }}
-      >
-        <defs>
-          {/* Gradient for hover arrow - blue/purple */}
-          <linearGradient id="hoverArrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style={{ stopColor: '#6366f1', stopOpacity: 0.85 }} />
-            <stop offset="100%" style={{ stopColor: '#8b5cf6', stopOpacity: 0.9 }} />
-          </linearGradient>
-        </defs>
-
-        {/* Outer glow layer */}
-        <line
-          x1={arrowStartX}
-          y1={arrowStartY}
-          x2={baseX}
-          y2={baseY}
-          stroke="#8b5cf6"
-          strokeWidth="18"
-          strokeLinecap="round"
-          opacity="0.2"
-        />
-
-        {/* Arrow shaft */}
-        <line
-          x1={arrowStartX}
-          y1={arrowStartY}
-          x2={baseX}
-          y2={baseY}
-          stroke="url(#hoverArrowGradient)"
-          strokeWidth="12"
-          strokeLinecap="round"
-        />
-
-        {/* Arrowhead */}
-        <polygon
-          points={`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`}
-          fill="url(#hoverArrowGradient)"
-          stroke="#6366f1"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
-
-        {/* Highlight on shaft */}
-        <line
-          x1={arrowStartX}
-          y1={arrowStartY}
-          x2={baseX}
-          y2={baseY}
-          stroke="#a78bfa"
-          strokeWidth="5"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-
-        {/* Highlight on arrowhead */}
-        <polygon
-          points={`${tipX},${tipY} ${(tipX + base1X) / 2},${(tipY + base1Y) / 2} ${(tipX + base2X) / 2},${(tipY + base2Y) / 2}`}
-          fill="#c4b5fd"
-          opacity="0.5"
-        />
-      </svg>
-    );
+      // example calibration:
+      globalShiftX: 5,
+      globalShiftY: 10,
+    });
   };
+
+
+  // const renderHoverArrow = () => {
+  //   if (!hoverMove || hoverMove.length < 4) return null;
+
+  //   return renderArrowCommon(hoverMove, {
+  //     gradientId: 'hoverArrowGradient',
+  //     startColor: '#6366f1',
+  //     endColor: '#8b5cf6',
+  //     outlineColor: '#4c1d95',
+  //     pulse: false,
+  //     zIndex: 11,
+  //   });
+  // };
+
+  // Parse and draw arrow for hover move (blue/purple)
+  // const renderHoverArrow = () => {
+  //   if (!hoverMove || hoverMove.length < 4) return null;
+
+  //   const from = hoverMove.substring(0, 2);
+  //   const to = hoverMove.substring(2, 4);
+
+  //   const fromCoords = squareToCoords(from);
+  //   const toCoords = squareToCoords(to);
+
+  //   // Calculate arrow direction and length
+  //   const dx = toCoords.x - fromCoords.x;
+  //   const dy = toCoords.y - fromCoords.y;
+  //   const angle = Math.atan2(dy, dx);
+  //   const length = Math.sqrt(dx * dx + dy * dy);
+
+  //   // Dynamic shortening based on arrow length
+  //   const squareSize = GRID_SIZE / 8;
+  //   const shortenStart = Math.min(25, length * 0.12);
+  //   const shortenEnd = Math.min(20, length * 0.10);
+
+  //   const arrowStartX = fromCoords.x + Math.cos(angle) * shortenStart;
+  //   const arrowStartY = fromCoords.y + Math.sin(angle) * shortenStart;
+  //   const arrowEndX = toCoords.x - Math.cos(angle) * shortenEnd;
+  //   const arrowEndY = toCoords.y - Math.sin(angle) * shortenEnd;
+
+  //   // Dynamic arrowhead size
+  //   const headLength = Math.min(32, Math.max(20, length * 0.15));
+  //   const headWidth = Math.min(28, Math.max(16, length * 0.13));
+
+  //   // Calculate perpendicular vector for arrowhead width
+  //   const perpAngle = angle + Math.PI / 2;
+  //   const halfWidth = headWidth / 2;
+
+  //   // Arrowhead triangle points
+  //   const tipX = arrowEndX;
+  //   const tipY = arrowEndY;
+
+  //   const baseX = arrowEndX - Math.cos(angle) * headLength;
+  //   const baseY = arrowEndY - Math.sin(angle) * headLength;
+
+  //   const base1X = baseX + Math.cos(perpAngle) * halfWidth;
+  //   const base1Y = baseY + Math.sin(perpAngle) * halfWidth;
+  //   const base2X = baseX - Math.cos(perpAngle) * halfWidth;
+  //   const base2Y = baseY - Math.sin(perpAngle) * halfWidth;
+
+  //   // Dynamic stroke widths based on length
+  //   const hoverNumSquares = length / squareSize;
+  //   // const mainStrokeWidth = Math.max(12, Math.min(16, length * 0.08));
+  //   const mainStrokeWidth = 15
+
+  //   // White core should be subtle and only visible on longer arrows
+  //   const whiteCoreWidth = mainStrokeWidth + Math.min(4, hoverNumSquares * 1.5);
+  //   const whiteCoreOpacity = Math.min(0.25, hoverNumSquares * 0.05); // Very subtle for short arrows
+
+  //   return (
+  //     <svg
+  //       style={{
+  //         position: 'absolute',
+  //         top: 0,
+  //         left: 0,
+  //         width: GRID_SIZE,
+  //         height: GRID_SIZE,
+  //         pointerEvents: 'none',
+  //         zIndex: 9
+  //       }}
+  //     >
+  //       <defs>
+  //         {/* Solid gradient for hover arrow - more opaque */}
+  //         <linearGradient id="hoverArrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+  //           <stop offset="0%" style={{ stopColor: '#6366f1', stopOpacity: 1 }} />
+  //           <stop offset="100%" style={{ stopColor: '#8b5cf6', stopOpacity: 1 }} />
+  //         </linearGradient>
+  //       </defs>
+
+  //       {/* Removed white outline - was making long arrows look washed out */}
+
+  //       {/* Arrow shaft - solid colored body */}
+  //       <line
+  //         x1={arrowStartX}
+  //         y1={arrowStartY}
+  //         x2={baseX}
+  //         y2={baseY}
+  //         stroke="url(#hoverArrowGradient)"
+  //         strokeWidth={mainStrokeWidth}
+  //         strokeLinecap="round"
+  //         opacity="0.95"
+  //       />
+
+  //       {/* Arrowhead - solid colored */}
+  //       <polygon
+  //         points={`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`}
+  //         fill="url(#hoverArrowGradient)"
+  //         stroke="#5b21b6"
+  //         strokeWidth="2"
+  //         strokeLinejoin="round"
+  //         opacity="0.95"
+  //       />
+
+  //       {/* Subtle center highlight for depth - only on longer arrows */}
+  //       {hoverNumSquares > 3 && (
+  //         <line
+  //           x1={arrowStartX}
+  //           y1={arrowStartY}
+  //           x2={baseX}
+  //           y2={baseY}
+  //           stroke="#8b5cf6"
+  //           strokeWidth={Math.max(2, mainStrokeWidth * 0.2)}
+  //           strokeLinecap="round"
+  //           opacity="0.3"
+  //         />
+  //       )}
+  //     </svg>
+  //   );
+  // };
+
+
+  // const renderArrow = () => {
+  //   if (!bestMove || bestMove.length < 4) return null;
+
+  //   return renderArrowCommon(bestMove, {
+  //     gradientId: 'bestMoveArrowGradient',
+  //     startColor: '#15803d',
+  //     endColor: '#16a34a',
+  //     outlineColor: '#14532d',
+  //     pulse: true,
+  //     pulseColor: '#22c55e',
+  //     zIndex: 12,
+  //   });
+  // };
+
 
   // Parse and draw arrow for best move
-  const renderArrow = () => {
-    if (!bestMove || bestMove.length < 4) return null;
-    
-    const from = bestMove.substring(0, 2);
-    const to = bestMove.substring(2, 4);
-    
-    const fromCoords = squareToCoords(from);
-    const toCoords = squareToCoords(to);
-    
-    // Calculate arrow direction
-    const dx = toCoords.x - fromCoords.x;
-    const dy = toCoords.y - fromCoords.y;
-    const angle = Math.atan2(dy, dx);
-    const length = Math.sqrt(dx * dx + dy * dy);
-    
-    // Shorten arrow to not overlap pieces much
-    const shortenStart = 20;
-    const shortenEnd = 15;
-    const arrowStartX = fromCoords.x + Math.cos(angle) * shortenStart;
-    const arrowStartY = fromCoords.y + Math.sin(angle) * shortenStart;
-    const arrowEndX = toCoords.x - Math.cos(angle) * shortenEnd;
-    const arrowEndY = toCoords.y - Math.sin(angle) * shortenEnd;
-    
-    // Create a smooth arrowhead triangle
-    const headLength = 28;
-    const headWidth = 24;
-    
-    // Calculate perpendicular vector for arrowhead width
-    const perpAngle = angle + Math.PI / 2;
-    const halfWidth = headWidth / 2;
-    
-    // Arrowhead triangle points
-    const tipX = arrowEndX;
-    const tipY = arrowEndY;
-    
-    const baseX = arrowEndX - Math.cos(angle) * headLength;
-    const baseY = arrowEndY - Math.sin(angle) * headLength;
-    
-    const base1X = baseX + Math.cos(perpAngle) * halfWidth;
-    const base1Y = baseY + Math.sin(perpAngle) * halfWidth;
-    const base2X = baseX - Math.cos(perpAngle) * halfWidth;
-    const base2Y = baseY - Math.sin(perpAngle) * halfWidth;
-    
-    return (
-      <svg
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: GRID_SIZE,
-          height: GRID_SIZE,
-          pointerEvents: 'none',
-          zIndex: 10
-        }}
-      >
-        <defs>
-          {/* Gradient for arrow */}
-          <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style={{ stopColor: '#15803d', stopOpacity: 0.9 }} />
-            <stop offset="100%" style={{ stopColor: '#16a34a', stopOpacity: 0.95 }} />
-          </linearGradient>
-          
-          {/* Glow filter */}
-          <filter id="arrowGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-          
-          {/* Shadow filter */}
-          <filter id="arrowShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
-            <feOffset dx="2" dy="2" result="offsetblur"/>
-            <feComponentTransfer>
-              <feFuncA type="linear" slope="0.5"/>
-            </feComponentTransfer>
-            <feMerge>
-              <feMergeNode/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-        
-        {/* Outer glow layer */}
-        <line
-          x1={arrowStartX}
-          y1={arrowStartY}
-          x2={baseX}
-          y2={baseY}
-          stroke="#22c55e"
-          strokeWidth="20"
-          strokeLinecap="round"
-          opacity="0.25"
-          filter="url(#arrowGlow)"
-        />
-        
-        {/* Shadow layer */}
-        <g filter="url(#arrowShadow)">
-          {/* Arrow shaft */}
-          <line
-            x1={arrowStartX}
-            y1={arrowStartY}
-            x2={baseX}
-            y2={baseY}
-            stroke="url(#arrowGradient)"
-            strokeWidth="14"
-            strokeLinecap="round"
-          />
-          
-          {/* Arrowhead */}
-          <polygon
-            points={`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`}
-            fill="url(#arrowGradient)"
-            stroke="#15803d"
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-          />
-        </g>
-        
-        {/* Highlight on shaft */}
-        <line
-          x1={arrowStartX}
-          y1={arrowStartY}
-          x2={baseX}
-          y2={baseY}
-          stroke="#4ade80"
-          strokeWidth="6"
-          strokeLinecap="round"
-          opacity="0.7"
-        />
-        
-        {/* Highlight on arrowhead */}
-        <polygon
-          points={`${tipX},${tipY} ${(tipX + base1X) / 2},${(tipY + base1Y) / 2} ${(tipX + base2X) / 2},${(tipY + base2Y) / 2}`}
-          fill="#4ade80"
-          opacity="0.6"
-        />
-        
-        {/* Animated pulse effect */}
-        <circle
-          cx={fromCoords.x}
-          cy={fromCoords.y}
-          r="15"
-          fill="none"
-          stroke="#22c55e"
-          strokeWidth="3"
-          opacity="0.6"
-        >
-          <animate
-            attributeName="r"
-            from="10"
-            to="30"
-            dur="1.5s"
-            repeatCount="indefinite"
-          />
-          <animate
-            attributeName="opacity"
-            from="0.8"
-            to="0"
-            dur="1.5s"
-            repeatCount="indefinite"
-          />
-        </circle>
-      </svg>
-    );
-  };
+  // const renderArrow = () => {
+  //   if (!bestMove || bestMove.length < 4) return null;
+
+  //   const from = bestMove.substring(0, 2);
+  //   const to = bestMove.substring(2, 4);
+
+  //   const fromCoords = squareToCoords(from);
+  //   const toCoords = squareToCoords(to);
+
+  //   // Calculate arrow direction and length
+  //   const dx = toCoords.x - fromCoords.x;
+  //   const dy = toCoords.y - fromCoords.y;
+  //   const angle = Math.atan2(dy, dx);
+  //   const length = Math.sqrt(dx * dx + dy * dy);
+
+  //   // Dynamic shortening based on arrow length
+  //   // Short arrows (1 square) need less shortening than long arrows
+  //   const squareSize = GRID_SIZE / 8; // 82px
+  //   const numSquares = length / squareSize;
+
+  //   // Scale shortening with arrow length - more natural positioning
+  //   const shortenStart = Math.min(25, length * 0.12); // Start 12% from origin
+  //   const shortenEnd = Math.min(20, length * 0.10);   // End 10% from target
+
+  //   const arrowStartX = fromCoords.x + Math.cos(angle) * shortenStart;
+  //   const arrowStartY = fromCoords.y + Math.sin(angle) * shortenStart;
+  //   const arrowEndX = toCoords.x - Math.cos(angle) * shortenEnd;
+  //   const arrowEndY = toCoords.y - Math.sin(angle) * shortenEnd;
+
+  //   // Dynamic arrowhead size based on length
+  //   const headLength = Math.min(32, Math.max(20, length * 0.15)); // 15% of length
+  //   const headWidth = Math.min(28, Math.max(16, length * 0.13));  // 13% of length
+
+  //   // Calculate perpendicular vector for arrowhead width
+  //   const perpAngle = angle + Math.PI / 2;
+  //   const halfWidth = headWidth / 2;
+
+  //   // Arrowhead triangle points
+  //   const tipX = arrowEndX;
+  //   const tipY = arrowEndY;
+
+  //   const baseX = arrowEndX - Math.cos(angle) * headLength;
+  //   const baseY = arrowEndY - Math.sin(angle) * headLength;
+
+  //   const base1X = baseX + Math.cos(perpAngle) * halfWidth;
+  //   const base1Y = baseY + Math.sin(perpAngle) * halfWidth;
+  //   const base2X = baseX - Math.cos(perpAngle) * halfWidth;
+  //   const base2Y = baseY - Math.sin(perpAngle) * halfWidth;
+
+  //   // Dynamic stroke widths based on length
+  //   const bestMoveNumSquares = length / (GRID_SIZE / 8);
+  //   const mainStrokeWidth = Math.max(12, Math.min(16, length * 0.08));
+
+  //   // White core for contrast - only on longer arrows
+  //   const whiteCoreWidth = mainStrokeWidth + Math.min(4, bestMoveNumSquares * 1.5);
+  //   const whiteCoreOpacity = Math.min(0.25, bestMoveNumSquares * 0.05);
+
+  //   return (
+  //     <svg
+  //       style={{
+  //         position: 'absolute',
+  //         top: 0,
+  //         left: 0,
+  //         width: GRID_SIZE,
+  //         height: GRID_SIZE,
+  //         pointerEvents: 'none',
+  //         zIndex: 10
+  //       }}
+  //     >
+  //       <defs>
+  //         {/* Solid gradient for best move arrow */}
+  //         <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+  //           <stop offset="0%" style={{ stopColor: '#15803d', stopOpacity: 1 }} />
+  //           <stop offset="100%" style={{ stopColor: '#16a34a', stopOpacity: 1 }} />
+  //         </linearGradient>
+  //       </defs>
+
+  //       {/* Removed white outline - was making long arrows look washed out */}
+
+  //       {/* Arrow shaft - solid colored body */}
+  //       <line
+  //         x1={arrowStartX}
+  //         y1={arrowStartY}
+  //         x2={baseX}
+  //         y2={baseY}
+  //         stroke="url(#arrowGradient)"
+  //         strokeWidth={mainStrokeWidth}
+  //         strokeLinecap="round"
+  //         opacity="0.95"
+  //       />
+
+  //       {/* Arrowhead - solid colored */}
+  //       <polygon
+  //         points={`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`}
+  //         fill="url(#arrowGradient)"
+  //         stroke="#15803d"
+  //         strokeWidth="2"
+  //         strokeLinejoin="round"
+  //         opacity="0.95"
+  //       />
+
+  //       {/* Removed center highlight - was making arrows look washed out */}
+
+  //       {/* Subtle highlight on arrowhead tip */}
+  //       <polygon
+  //         points={`${tipX},${tipY} ${(tipX + base1X) / 2},${(tipY + base1Y) / 2} ${(tipX + base2X) / 2},${(tipY + base2Y) / 2}`}
+  //         fill="#86efac"
+  //         opacity="0.5"
+  //       />
+
+  //       {/* Animated pulse effect */}
+  //       <circle
+  //         cx={fromCoords.x}
+  //         cy={fromCoords.y}
+  //         r="15"
+  //         fill="none"
+  //         stroke="#22c55e"
+  //         strokeWidth="3"
+  //         opacity="0.6"
+  //       >
+  //         <animate
+  //           attributeName="r"
+  //           from="10"
+  //           to="30"
+  //           dur="1.5s"
+  //           repeatCount="indefinite"
+  //         />
+  //         <animate
+  //           attributeName="opacity"
+  //           from="0.8"
+  //           to="0"
+  //           dur="1.5s"
+  //           repeatCount="indefinite"
+  //         />
+  //       </circle>
+  //     </svg>
+  //   );
+  // };
 
   // Render tactical motif indicators (e.g., hanging pieces, threats)
   const renderTacticalMotifs = () => {

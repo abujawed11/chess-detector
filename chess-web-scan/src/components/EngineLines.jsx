@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
  * EngineLines - Displays multiple engine analysis lines (MultiPV)
@@ -6,8 +6,23 @@ import { useState } from 'react';
  */
 export default function EngineLines({ lines, depth, turn, onLineClick, onLineHover }) {
   const [expandedLine, setExpandedLine] = useState(null);
+  const [hoveredLine, setHoveredLine] = useState(null);
 
   // console.log('📊 EngineLines received:', { lines, depth, turn, linesCount: lines?.length });
+
+  // Automatically show arrow for the best move (first line) when not hovering
+  useEffect(() => {
+    if (hoveredLine === null) {
+      // Not hovering over any line - show first line's arrow
+      if (lines && lines.length > 0) {
+        const firstLine = lines[0];
+        const firstMove = firstLine.pv?.[0] || null;
+        onLineHover?.(firstMove);
+      } else {
+        onLineHover?.(null);
+      }
+    }
+  }, [lines, hoveredLine]);
 
   if (!lines || lines.length === 0) {
     return (
@@ -67,14 +82,20 @@ export default function EngineLines({ lines, depth, turn, onLineClick, onLineHov
             key={index}
             line={line}
             lineNumber={index + 1}
+            lineIndex={index}
             turn={turn}
             isExpanded={expandedLine === index}
             onClick={() => {
               setExpandedLine(expandedLine === index ? null : index);
               onLineClick?.(line);
             }}
-            onHover={(move) => {
+            onHoverEnter={(move) => {
+              setHoveredLine(index);
               onLineHover?.(move);
+            }}
+            onHoverLeave={() => {
+              setHoveredLine(null);
+              // Effect will restore first line's arrow
             }}
           />
         ))}
@@ -83,7 +104,7 @@ export default function EngineLines({ lines, depth, turn, onLineClick, onLineHov
   );
 }
 
-function EngineLine({ line, lineNumber, turn, isExpanded, onClick, onHover }) {
+function EngineLine({ line, lineNumber, lineIndex, turn, isExpanded, onClick, onHoverEnter, onHoverLeave }) {
   const evaluation = line.evaluation || line.score || { type: 'cp', value: 0 };
   const pv = line.pv || [];
 
@@ -153,15 +174,15 @@ function EngineLine({ line, lineNumber, turn, isExpanded, onClick, onHover }) {
         if (!isExpanded) {
           e.currentTarget.style.background = '#2d3748';
         }
-        // Call hover callback with first move
-        onHover?.(firstMove);
+        // Call hover enter with this line's first move
+        onHoverEnter?.(firstMove);
       }}
       onMouseLeave={(e) => {
         if (!isExpanded) {
           e.currentTarget.style.background = 'transparent';
         }
-        // Clear hover arrow
-        onHover?.(null);
+        // Call hover leave - will trigger reset to first line
+        onHoverLeave?.();
       }}
     >
       {/* Line header with evaluation */}
