@@ -425,73 +425,61 @@ export default function Analysis({ initialFen, onEditPosition }) {
         let evaluationAfterMove = null;
         let result = null;
 
-        // We'll run things in parallel, but:
-        // - ALWAYS call backend evaluateMove if we have previousAnalysis
-        // - ONLY call analyze(newFen) if NOT game over
-        const promises = [];
-
-        // Promise 1: BACKEND move evaluation (we want this EVEN if game is over)
+        // IMPORTANT: Run sequentially to avoid Stockfish singleton conflicts
+        // Step 1: Evaluate the move (if we have previous analysis)
         if (previousAnalysis?.lines?.length) {
           const movePlayed = move.from + move.to + (move.promotion || '');
 
-          promises.push(
-            evaluateMove(previousFen, movePlayed, analysisDepth, 5)
-              .then((evaluation) => {
-                console.log('✅ Backend evaluation result:', evaluation);
+          try {
+            console.log('🔍 Evaluating move classification...');
+            const evaluation = await evaluateMove(previousFen, movePlayed, analysisDepth, 5);
+            console.log('✅ Move evaluation complete:', evaluation);
 
-                const badge = getMoveBadge(evaluation);
-                explanation = getMoveExplanation(evaluation);
+            const badge = getMoveBadge(evaluation);
+            explanation = getMoveExplanation(evaluation);
 
-                classification = {
-                  classification: evaluation.label.toLowerCase(),
-                  label: evaluation.label,
-                  cpLoss: evaluation.cpl || 0,
-                  color: badge.color,
-                  isBrilliantV2:
-                    evaluation.label === 'Brilliant' ||
-                    evaluation.label === 'Great',
-                  brilliantAnalysis: evaluation.brilliantInfo || null,
-                  fullEvaluation: evaluation
-                };
+            classification = {
+              classification: evaluation.label.toLowerCase(),
+              label: evaluation.label,
+              cpLoss: evaluation.cpl || 0,
+              color: badge.color,
+              isBrilliantV2:
+                evaluation.label === 'Brilliant' ||
+                evaluation.label === 'Great',
+              brilliantAnalysis: evaluation.brilliantInfo || null,
+              fullEvaluation: evaluation
+            };
 
-                // Use evaluation from backend
-                evaluationAfterMove =
-                  evaluation.raw?.eval_after_struct || {
-                    type: 'cp',
-                    value: evaluation.evalAfter || 0
-                  };
+            // Use evaluation from backend
+            evaluationAfterMove =
+              evaluation.raw?.eval_after_struct || {
+                type: 'cp',
+                value: evaluation.evalAfter || 0
+              };
 
-                console.log('📊 Classification applied:', classification);
-              })
-              .catch((e) => {
-                console.error('❌ Backend evaluation error:', e);
-                classification = {
-                  classification: 'good',
-                  label: 'Good',
-                  cpLoss: 0,
-                  color: '#96af8b',
-                  isBrilliantV2: false
-                };
-                explanation = 'Move classification unavailable - backend error';
-              })
-          );
+            console.log('📊 Classification applied:', classification);
+          } catch (e) {
+            console.error('❌ Move evaluation error:', e);
+            classification = {
+              classification: 'good',
+              label: 'Good',
+              cpLoss: 0,
+              color: '#96af8b',
+              isBrilliantV2: false
+            };
+            explanation = 'Move classification unavailable - error';
+          }
         }
 
-        // Promise 2: Engine lines for the new position (ONLY if not game over)
+        // Step 2: Analyze new position for engine lines (ONLY if not game over)
         if (!isGameOverPosition) {
-          promises.push(
-            analyze(newFen, { depth: analysisDepth, multiPV: 3 })
-              .then((res) => {
-                result = res;
-              })
-              .catch((err) => console.error('Analysis error:', err))
-          );
-        }
-
-        if (promises.length > 0) {
-          console.log('⚡ Running analysis and classification in parallel...');
-          await Promise.all(promises);
-          console.log('✅ Both operations complete!');
+          try {
+            console.log('🔍 Analyzing new position for engine lines...');
+            result = await analyze(newFen, { depth: analysisDepth, multiPV: 3 });
+            console.log('✅ Position analysis complete');
+          } catch (err) {
+            console.error('❌ Position analysis error:', err);
+          }
         }
 
         // -----------------------------
