@@ -270,6 +270,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
   const [dragOverBin, setDragOverBin] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [sideWarning, setSideWarning] = useState(null);
+  const [selectedSquares, setSelectedSquares] = useState(new Set());
 
   const fen = useMemo(() => buildFen({ pieces, side, castling, ep }), [pieces, side, castling, ep]);
   const fenStatus = useMemo(() => {
@@ -300,11 +301,13 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     setPieces({});
     setCastling({K:false,Q:false,k:false,q:false});
     setEp("");
+    setSelectedSquares(new Set());
   }
 
   function fillStart(){
     const s = parseFenToState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     setPieces(s.pieces); setSide("w"); setCastling(s.castling); setEp("");
+    setSelectedSquares(new Set());
   }
 
   function flipBoard(){ setFlipped(f => !f); }
@@ -329,6 +332,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     setCoordinatesFlipped(c => !c);
     // Also flip the board view so pieces stay in same visual position
     setFlipped(f => !f);
+    setSelectedSquares(new Set());
   }
 
 
@@ -481,9 +485,62 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     if (e.type === "contextmenu") {
       e.preventDefault();
       removePiece(square);
+      setSelectedSquares(new Set()); // Clear selection
       return;
     }
+
+    // Multi-select with Ctrl/Cmd + Click
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (pieces[square]) { // Only select squares with pieces
+        setSelectedSquares(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(square)) {
+            newSet.delete(square); // Deselect if already selected
+          } else {
+            newSet.add(square); // Add to selection
+          }
+          return newSet;
+        });
+      }
+    } else {
+      // Regular click - clear selection
+      setSelectedSquares(new Set());
+    }
   }
+
+  // Delete all selected pieces
+  function deleteSelected() {
+    if (selectedSquares.size === 0) return;
+
+    setPieces(prev => {
+      const newPieces = {...prev};
+      selectedSquares.forEach(square => {
+        delete newPieces[square];
+      });
+      return newPieces;
+    });
+    setSelectedSquares(new Set());
+  }
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e) {
+      // Delete or Backspace key
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSquares.size > 0) {
+        e.preventDefault();
+        deleteSelected();
+      }
+      // Escape to clear selection
+      if (e.key === 'Escape' && selectedSquares.size > 0) {
+        e.preventDefault();
+        setSelectedSquares(new Set());
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSquares]);
 
   const squaresRender = [];
   for (const rank of (flipped ? RANKS.slice().reverse() : RANKS)) {
@@ -501,6 +558,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
     const st = parseFenToState(txt);
     setPieces(st.pieces); setSide(st.side); setCastling(st.castling); setEp(st.ep);
     setFenInput("");
+    setSelectedSquares(new Set());
   }
 
   return (
@@ -603,6 +661,19 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
               Flip Ranks {coordinatesFlipped ? '(Black view)' : '(White view)'}
             </ToolbarBtn>
             <ToolbarBtn onClick={clearBoard}>Clear Board</ToolbarBtn>
+            <ToolbarBtn
+              onClick={deleteSelected}
+              disabled={selectedSquares.size === 0}
+              style={{
+                background: selectedSquares.size > 0
+                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                  : undefined,
+                color: selectedSquares.size > 0 ? '#fff' : undefined,
+                fontWeight: selectedSquares.size > 0 ? 600 : undefined
+              }}
+            >
+              Delete Selected ({selectedSquares.size})
+            </ToolbarBtn>
           </div>
 
           <div style={{
@@ -742,6 +813,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                   const piece = pieces[sq];
                   const isDragOver = dragOverSquare === sq;
                   const isDragging = dragFrom === sq;
+                  const isSelected = selectedSquares.has(sq);
 
                   return (
                     <div
@@ -755,11 +827,17 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                         position: 'relative',
                         background: isDragOver
                           ? (isLight ? '#c3e88d' : '#9ccc65')
-                          : bg,
+                          : isSelected
+                            ? (isLight ? '#fbbf24' : '#f59e0b')
+                            : bg,
                         transition: 'all 0.2s ease',
                         cursor: piece ? 'grab' : 'default',
                         opacity: isDragging ? 0.4 : 1,
-                        boxShadow: isDragOver ? 'inset 0 0 0 3px #10b981' : 'none'
+                        boxShadow: isDragOver
+                          ? 'inset 0 0 0 3px #10b981'
+                          : isSelected
+                            ? 'inset 0 0 0 4px #dc2626'
+                            : 'none'
                       }}
                     >
                       {/* Coordinates */}
@@ -1129,6 +1207,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
         }}>
           <strong>Tips:</strong> Drag pieces from palettes to board - Drag between squares to move -
           <strong> Drag to trash bin to remove</strong> - Right-click to remove - Shift+drag to copy -
+          <strong style={{ color: '#dc2626' }}> Ctrl/Cmd+Click to multi-select - Delete key to remove selected</strong> -
           Position rules enforced (1 king per color, max 8 pawns, etc.)
         </div>
       </div>
