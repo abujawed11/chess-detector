@@ -1037,8 +1037,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 fen={currentFen}
                 onMove={handleMove}
                 flipped={flipped}
-                bestMove={bestMove}
-                hoverMove={hoverMove}
+                bestMove={playComputerMode ? null : bestMove}
+                hoverMove={playComputerMode ? null : hoverMove}
                 lastMove={lastMove}
                 moveBadge={moveBadge}
                 disabled={playComputerMode && (
