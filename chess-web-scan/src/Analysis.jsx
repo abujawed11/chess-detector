@@ -69,6 +69,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [analyzeMoveType, setAnalyzeMoveType] = useState(false); // OFF by default
 
   const { initialized, analyzing, analyze, error, getThreadInfo, setThreads } = useStockfish();
 
@@ -426,8 +427,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
         let result = null;
 
         // IMPORTANT: Run sequentially to avoid Stockfish singleton conflicts
-        // Step 1: Evaluate the move (if we have previous analysis)
-        if (previousAnalysis?.lines?.length) {
+        // Step 1: Evaluate the move (if we have previous analysis AND analyzeMoveType is enabled)
+        if (previousAnalysis?.lines?.length && analyzeMoveType) {
           const movePlayed = move.from + move.to + (move.promotion || '');
 
           try {
@@ -547,8 +548,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
         // Set the classification to display in the UI
         setLastMoveClassification(classification);
 
-        // Move badge on the destination square
-        if (classification && classification.label) {
+        // Move badge on the destination square (only if analyzeMoveType is enabled)
+        if (analyzeMoveType && classification && classification.label) {
           if (badgeTimeoutRef.current) {
             clearTimeout(badgeTimeoutRef.current);
           }
@@ -562,6 +563,9 @@ export default function Analysis({ initialFen, onEditPosition }) {
             color: classification.color,
             symbol
           });
+        } else if (!analyzeMoveType) {
+          // Clear badge if analyzeMoveType is disabled
+          setMoveBadge(null);
         }
 
         // Only show best move if the game is not over
@@ -574,7 +578,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
         setIsProcessingMove(false);
       }
     },
-    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove]
+    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove, analyzeMoveType]
   );
 
   // Function to make computer move
@@ -773,8 +777,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
         // Set last move for highlighting
         setLastMove({ from: currentMove.from, to: currentMove.to });
 
-        // Set move badge on board square (Chess.com style)
-        if (currentMove.classification) {
+        // Set move badge on board square (Chess.com style) - only if analyzeMoveType is enabled
+        if (analyzeMoveType && currentMove.classification) {
           // Clear any existing timeout
           if (badgeTimeoutRef.current) {
             clearTimeout(badgeTimeoutRef.current);
@@ -816,7 +820,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       // User can manually reset if needed
       alert('Navigation error occurred. Check console for details. Board state preserved.');
     }
-  }, [game, moves, startFen]);
+  }, [game, moves, startFen, analyzeMoveType]);
 
   const resetToStart = useCallback(() => {
     game.reset();
@@ -890,7 +894,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="m-0 mb-2 text-2xl font-bold tracking-tight">Position Analysis</h2>
-          <div className={`inline-flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm
+          {/* <div className={`inline-flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm
             ${initialized ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
             <strong className="font-semibold">Engine:</strong>
             {initialized ? 'Ready' : 'Initializing…'}
@@ -901,7 +905,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 {!threadInfo.supportsMultiThreading && ' (single-threaded)'}
               </span>
             )}
-          </div>
+          </div> */}
         </div>
 
         {/* Controls */}
@@ -915,6 +919,17 @@ export default function Analysis({ initialFen, onEditPosition }) {
               className="hidden"
             />
             <span className="font-semibold">Auto-analyze</span>
+          </label>
+
+          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-1.5
+            ${analyzeMoveType ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+            <input
+              type="checkbox"
+              checked={analyzeMoveType}
+              onChange={(e) => setAnalyzeMoveType(e.target.checked)}
+              className="hidden"
+            />
+            <span className="font-semibold">Analyze Move Type</span>
           </label>
 
           {/* <label className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-1.5
@@ -1077,8 +1092,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
               </button>
             </div>
 
-            {/* Move Explanation Card - appears below navigation */}
-            {currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
+            {/* Move Explanation Card - appears below navigation (only if analyzeMoveType is enabled) */}
+            {analyzeMoveType && currentMoveIndex >= 0 && moves[currentMoveIndex]?.explanation && (
               <div className="w-[680px]">
                 <MoveExplanationCard
                   moveNumber={currentMoveIndex + 1}
@@ -1095,15 +1110,15 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
         {/* Right panel */}
         <div className="w-full max-w-[460px] space-y-3 xl:sticky xl:top-4 xl:w-[460px] xl:shrink-0">
-          {/* Move Details Panel - shows all backend evaluation data */}
-          {currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
+          {/* Move Details Panel - shows all backend evaluation data (only if analyzeMoveType is enabled) */}
+          {analyzeMoveType && currentMoveIndex >= 0 && moves[currentMoveIndex]?.fullEvaluation && (
             <MoveDetailsPanel
               moveData={moves[currentMoveIndex].fullEvaluation}
               visible={true}
             />
           )}
-          {/* Classification - show loading while processing or actual classification */}
-          {(isProcessingMove || lastMoveClassification) && (
+          {/* Classification - show loading while processing or actual classification (only if analyzeMoveType is enabled) */}
+          {analyzeMoveType && (isProcessingMove || lastMoveClassification) && (
             <div className="flex min-h-[90px] items-center rounded-xl border border-slate-200 bg-white p-3 shadow transition-all duration-200">
               {isProcessingMove ? (
                 <div className="w-full space-y-2">
@@ -1132,8 +1147,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
             </div>
           )}
 
-          {/* Brilliant Move Details - show when move is brilliant V2 */}
-          {lastMoveClassification?.isBrilliantV2 && lastMoveClassification?.brilliantAnalysis && (
+          {/* Brilliant Move Details - show when move is brilliant V2 (only if analyzeMoveType is enabled) */}
+          {analyzeMoveType && lastMoveClassification?.isBrilliantV2 && lastMoveClassification?.brilliantAnalysis && (
             <div className="rounded-xl border-2 border-cyan-400 bg-linear-to-br from-cyan-50 to-teal-50 p-4 shadow-lg">
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-2xl">💎</span>
