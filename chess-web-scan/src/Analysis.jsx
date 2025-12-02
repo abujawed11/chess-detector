@@ -917,7 +917,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
             <span className="font-semibold">Auto-analyze</span>
           </label>
 
-          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-1.5
+          {/* <label className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-1.5
             ${showBestMove ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}>
             <input
               type="checkbox"
@@ -926,16 +926,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
               className="hidden"
             />
             <span className="font-semibold">Show Best Move</span>
-          </label>
+          </label> */}
 
-          <button
+          {/* <button
             onClick={requestHint}
             disabled={!initialized || analyzing || hintRequested || isGameOver}
             className={`rounded-lg px-4 py-2 font-bold text-white transition
               ${hintRequested ? 'bg-green-600' : (initialized && !isGameOver) ? 'bg-amber-600' : 'bg-slate-400 cursor-not-allowed'}`}
           >
             {hintRequested ? '✓ Hint Shown' : '💡 Get Hint'}
-          </button>
+          </button> */}
 
           <select
             value={analysisDepth}

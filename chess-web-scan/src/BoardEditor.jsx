@@ -599,25 +599,41 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
           paddingBottom: 16,
           borderBottom: '2px solid #f0f0f0'
         }}>
-          <h2 style={{
-            margin: 0,
-            fontSize: 28,
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            Board Editor
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 24,
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+            }}>
+              ♟️
+            </div>
+            <h2 style={{
+              margin: 0,
+              fontSize: 28,
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              Board Editor
+            </h2>
+          </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <ToolbarBtn onClick={() => onCancel?.()}>
+            <ToolbarBtn onClick={() => onCancel?.()} icon="✕">
               Cancel
             </ToolbarBtn>
             <ToolbarBtn
               onClick={() => onAnalyze?.(fen)}
               disabled={!fenStatus.valid || validationErrors.length > 0}
+              icon="🔬"
               style={{
                 background: (fenStatus.valid && validationErrors.length === 0)
                   ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
@@ -631,6 +647,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
             <ToolbarBtn
               onClick={() => onDone?.(fen)}
               disabled={!fenStatus.valid || validationErrors.length > 0}
+              icon="💾"
               style={{
                 background: (fenStatus.valid && validationErrors.length === 0)
                   ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
@@ -646,68 +663,210 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
 
         {/* Toolbar */}
         <div style={{
-          display: 'flex',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginBottom: 24,
-          padding: 16,
-          background: '#f9fafb',
-          borderRadius: 12
+          display: 'grid',
+          gap: 16,
+          marginBottom: 24
         }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <ToolbarBtn onClick={flipBoard}>Flip View</ToolbarBtn>
-            <ToolbarBtn onClick={fillStart}>Reset to Start</ToolbarBtn>
-            <ToolbarBtn onClick={flipRanks}>
-              Flip Ranks {coordinatesFlipped ? '(Black view)' : '(White view)'}
-            </ToolbarBtn>
-            <ToolbarBtn onClick={clearBoard}>Clear Board</ToolbarBtn>
-            <ToolbarBtn
-              onClick={deleteSelected}
-              disabled={selectedSquares.size === 0}
-              style={{
-                background: selectedSquares.size > 0
-                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                  : undefined,
-                color: selectedSquares.size > 0 ? '#fff' : undefined,
-                fontWeight: selectedSquares.size > 0 ? 600 : undefined
-              }}
-            >
-              Delete Selected ({selectedSquares.size})
-            </ToolbarBtn>
-          </div>
-
+          {/* Board Actions Section */}
           <div style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            padding: '8px 14px',
-            background: 'white',
-            borderRadius: 10,
-            border: '2px solid #e5e7eb'
+            padding: 16,
+            background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
           }}>
-            <span style={{ fontWeight: 600, color: '#6b7280' }}>Castling:</span>
-            {["K","Q","k","q"].map(k => (
-              <label key={k} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={!!castling[k]}
-                  onChange={e => setCastling(prev=>({...prev,[k]:e.target.checked}))}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span style={{ fontWeight: 600 }}>{k}</span>
-              </label>
-            ))}
+            <div style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#6b7280',
+              marginBottom: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>⚙️</span> Board Actions
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <ToolbarBtn onClick={flipBoard} icon="🔄">
+                Flip View
+              </ToolbarBtn>
+              <ToolbarBtn onClick={fillStart} icon="♟️">
+                Reset to Start
+              </ToolbarBtn>
+              <ToolbarBtn onClick={flipRanks} icon="🔃">
+                {/* {coordinatesFlipped ? 'Black View' : 'White View'} */}
+                Flip Rank
+              </ToolbarBtn>
+              <ToolbarBtn onClick={clearBoard} icon="🗑️">
+                Clear Board
+              </ToolbarBtn>
+              <ToolbarBtn
+                onClick={deleteSelected}
+                disabled={selectedSquares.size === 0}
+                icon="✂️"
+                style={{
+                  background: selectedSquares.size > 0
+                    ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                    : undefined,
+                  color: selectedSquares.size > 0 ? '#fff' : undefined,
+                  fontWeight: selectedSquares.size > 0 ? 600 : undefined
+                }}
+              >
+                Delete Selected {selectedSquares.size > 0 ? `(${selectedSquares.size})` : ''}
+              </ToolbarBtn>
+              <ToolbarBtn onClick={() => navigator.clipboard.writeText(fen)} icon="📋">
+                Copy FEN
+              </ToolbarBtn>
+            </div>
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <ToolbarBtn onClick={() => navigator.clipboard.writeText(fen)}>
-              Copy FEN
-            </ToolbarBtn>
+          {/* Game Settings Section */}
+          <div style={{
+            padding: 16,
+            background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+          }}>
+            <div style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#6b7280',
+              marginBottom: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>👑</span> Game Settings
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Castling Rights */}
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                padding: '10px 16px',
+                background: 'white',
+                borderRadius: 10,
+                border: '2px solid #e5e7eb',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <span style={{ fontWeight: 600, color: '#6b7280', fontSize: 14 }}>🏰 Castling:</span>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {["K","Q","k","q"].map(k => (
+                    <label key={k} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      borderRadius: 6,
+                      background: castling[k] ? '#f0fdf4' : 'transparent',
+                      border: castling[k] ? '1px solid #86efac' : '1px solid transparent',
+                      transition: 'all 0.2s'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={!!castling[k]}
+                        onChange={e => setCastling(prev=>({...prev,[k]:e.target.checked}))}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{k}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Turn Selection */}
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                padding: '10px 16px',
+                background: 'white',
+                borderRadius: 10,
+                border: '2px solid #e5e7eb',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <span style={{ fontWeight: 600, color: '#6b7280', fontSize: 14 }}>🎯 Turn:</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    background: side === 'w' ? 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)' : 'white',
+                    border: side === 'w' ? '2px solid #8b5cf6' : '2px solid #e5e7eb',
+                    fontWeight: side === 'w' ? 600 : 500,
+                    transition: 'all 0.2s'
+                  }}>
+                    <input
+                      type="radio"
+                      name="turn"
+                      checked={side==="w"}
+                      onChange={()=>setSide("w")}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>⚪ White</span>
+                  </label>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    background: side === 'b' ? 'linear-gradient(135deg, #1f2937 0%, #111827 100%)' : 'white',
+                    color: side === 'b' ? 'white' : '#374151',
+                    border: side === 'b' ? '2px solid #8b5cf6' : '2px solid #e5e7eb',
+                    fontWeight: side === 'b' ? 600 : 500,
+                    transition: 'all 0.2s'
+                  }}>
+                    <input
+                      type="radio"
+                      name="turn"
+                      checked={side==="b"}
+                      onChange={()=>setSide("b")}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>⚫ Black</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* En Passant */}
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                padding: '10px 16px',
+                background: 'white',
+                borderRadius: 10,
+                border: '2px solid #e5e7eb',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <span style={{ fontWeight: 600, color: '#6b7280', fontSize: 14 }}>⚡ En Passant:</span>
+                <input
+                  value={ep}
+                  onChange={(e)=>setEp(e.target.value.trim())}
+                  placeholder="e.g. e3"
+                  style={{
+                    width: 80,
+                    padding: '8px 12px',
+                    border: '2px solid #d1d5db',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 500
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -715,13 +874,20 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
         {sideWarning && (
           <div style={{
             marginBottom: 16,
-            padding: 12,
-            background: '#fef3c7',
-            border: '2px solid #f59e0b',
-            borderRadius: 10,
-            color: '#92400e'
+            padding: 14,
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            border: '2px solid #fbbf24',
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(251, 191, 36, 0.2)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10
           }}>
-            <strong>⚠️ Auto-corrected:</strong> {sideWarning}
+            <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <strong style={{ color: '#92400e', display: 'block', marginBottom: 4 }}>Auto-corrected:</strong>
+              <span style={{ color: '#78350f', fontSize: 13 }}>{sideWarning}</span>
+            </div>
           </div>
         )}
 
@@ -729,14 +895,17 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
         {validationErrors.length > 0 && (
           <div style={{
             marginBottom: 16,
-            padding: 12,
-            background: '#fef2f2',
-            border: '2px solid #ef4444',
-            borderRadius: 10,
-            color: '#991b1b'
+            padding: 14,
+            background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+            border: '2px solid #fca5a5',
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(252, 165, 165, 0.2)'
           }}>
-            <strong>⚠️ Position Issues:</strong>
-            <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 20 }}>❌</span>
+              <strong style={{ color: '#991b1b', fontSize: 14 }}>Position Issues:</strong>
+            </div>
+            <ul style={{ margin: '4px 0 0 28px', paddingLeft: 8, color: '#7f1d1d', fontSize: 13, lineHeight: 1.6 }}>
               {validationErrors.map((err, i) => (
                 <li key={i}>{err}</li>
               ))}
@@ -837,7 +1006,8 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                           ? 'inset 0 0 0 3px #10b981'
                           : isSelected
                             ? 'inset 0 0 0 4px #dc2626'
-                            : 'none'
+                            : 'none',
+                        overflow: 'hidden'
                       }}
                     >
                       {/* Coordinates */}
@@ -888,8 +1058,6 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                             transform: isDragging ? 'scale(0.8)' : 'scale(1)',
                             userSelect: 'none'
                           }}
-                          onMouseEnter={(e) => !isDragging && (e.currentTarget.style.transform = 'scale(1.15)')}
-                          onMouseLeave={(e) => !isDragging && (e.currentTarget.style.transform = 'scale(1)')}
                         />
                       )}
 
@@ -1049,25 +1217,32 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
             }}>
               <div style={{
                 padding: 16,
-                background: '#f9fafb',
+                background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
                 borderRadius: 12,
-                border: '2px solid #e5e7eb'
+                border: '2px solid #e5e7eb',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
               }}>
                 <div style={{
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: 700,
-                  color: '#374151',
+                  color: '#6b7280',
                   marginBottom: 12,
-                  textAlign: 'center'
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
                 }}>
-                  Original Detected Board
+                  <span>📷</span> Original Detected Board
                 </div>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'center',
                   background: 'white',
-                  borderRadius: 8,
-                  padding: 12
+                  borderRadius: 10,
+                  padding: 12,
+                  border: '2px solid #e5e7eb'
                 }}>
                   <img
                     src={overlayImage}
@@ -1077,17 +1252,26 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
                       maxWidth: 480,
                       height: 'auto',
                       objectFit: 'contain',
-                      borderRadius: 4
+                      borderRadius: 6
                     }}
                   />
                 </div>
                 <div style={{
                   fontSize: 12,
                   color: '#6b7280',
-                  marginTop: 8,
-                  textAlign: 'center'
+                  marginTop: 10,
+                  textAlign: 'center',
+                  padding: '8px 12px',
+                  background: '#f0fdf4',
+                  borderRadius: 8,
+                  border: '1px solid #86efac',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
                 }}>
-                  Compare with the editor to verify piece positions
+                  <span>💡</span>
+                  <span style={{ fontWeight: 500 }}>Compare with editor to verify positions</span>
                 </div>
               </div>
             </div>
@@ -1097,118 +1281,137 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
         {/* Bottom Controls */}
         <div style={{
           display: 'grid',
-          gap: 16,
-          padding: 16,
-          background: '#f9fafb',
-          borderRadius: 12
+          gap: 16
         }}>
-          {/* Turn and EP */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {/* FEN Display Section */}
+          <div style={{
+            padding: 16,
+            background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+          }}>
             <div style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#6b7280',
+              marginBottom: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
               display: 'flex',
-              gap: 12,
               alignItems: 'center',
-              padding: '10px 16px',
-              background: 'white',
-              borderRadius: 10,
-              border: '2px solid #e5e7eb'
+              gap: 6
             }}>
-              <span style={{ fontWeight: 600, color: '#6b7280' }}>Turn:</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="turn"
-                  checked={side==="w"}
-                  onChange={()=>setSide("w")}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span>White</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="turn"
-                  checked={side==="b"}
-                  onChange={()=>setSide("b")}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span>Black</span>
-              </label>
+              <span>📝</span> FEN Position
             </div>
-
             <div style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
-              padding: '10px 16px',
-              background: 'white',
+              fontFamily: 'ui-monospace, monospace',
+              padding: 14,
+              background: (fenStatus.valid && validationErrors.length === 0)
+                ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                : 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+              border: `2px solid ${(fenStatus.valid && validationErrors.length === 0) ? '#86efac' : '#fca5a5'}`,
               borderRadius: 10,
-              border: '2px solid #e5e7eb'
+              color: (fenStatus.valid && validationErrors.length === 0) ? '#065f46' : '#991b1b',
+              fontSize: 13,
+              fontWeight: 500,
+              wordBreak: 'break-all',
+              lineHeight: 1.6,
+              position: 'relative',
+              boxShadow: (fenStatus.valid && validationErrors.length === 0)
+                ? '0 2px 8px rgba(134, 239, 172, 0.2)'
+                : '0 2px 8px rgba(252, 165, 165, 0.2)'
             }}>
-              <span style={{ fontWeight: 600, color: '#6b7280' }}>En Passant:</span>
+              <div style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                fontSize: 20
+              }}>
+                {(fenStatus.valid && validationErrors.length === 0) ? '✅' : '❌'}
+              </div>
+              {fen}
+            </div>
+          </div>
+
+          {/* Load FEN Section */}
+          <div style={{
+            padding: 16,
+            background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+          }}>
+            <div style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#6b7280',
+              marginBottom: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>📥</span> Load FEN Position
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
               <input
-                value={ep}
-                onChange={(e)=>setEp(e.target.value.trim())}
-                placeholder="e.g. e3"
+                value={fenInput}
+                onChange={(e)=>setFenInput(e.target.value)}
+                placeholder="Paste FEN string to load position..."
                 style={{
-                  width: 80,
-                  padding: '6px 10px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 6
+                  flex: 1,
+                  padding: '12px 16px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: 10,
+                  fontSize: 14,
+                  fontFamily: 'ui-monospace, monospace',
+                  fontWeight: 500
                 }}
               />
+              <ToolbarBtn onClick={loadFen} icon="⬆️" style={{ minWidth: 120 }}>
+                Load FEN
+              </ToolbarBtn>
             </div>
-          </div>
-
-          {/* FEN Display */}
-          <div style={{
-            fontFamily: 'ui-monospace, monospace',
-            padding: 12,
-            background: (fenStatus.valid && validationErrors.length === 0)
-              ? 'rgba(16, 185, 129, 0.1)'
-              : 'rgba(239, 68, 68, 0.1)',
-            border: `2px solid ${(fenStatus.valid && validationErrors.length === 0) ? '#10b981' : '#ef4444'}`,
-            borderRadius: 10,
-            color: (fenStatus.valid && validationErrors.length === 0) ? '#065f46' : '#991b1b',
-            fontSize: 13,
-            wordBreak: 'break-all'
-          }}>
-            {fen}
-          </div>
-
-          {/* FEN Load */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={fenInput}
-              onChange={(e)=>setFenInput(e.target.value)}
-              placeholder="Paste FEN string to load position..."
-              style={{
-                flex: 1,
-                padding: '10px 14px',
-                border: '2px solid #e5e7eb',
-                borderRadius: 10,
-                fontSize: 14
-              }}
-            />
-            <ToolbarBtn onClick={loadFen} style={{ minWidth: 100 }}>
-              Load FEN
-            </ToolbarBtn>
           </div>
         </div>
 
         {/* Help Text */}
         <div style={{
           marginTop: 16,
-          padding: 12,
-          background: '#eff6ff',
-          borderRadius: 8,
-          fontSize: 13,
-          color: '#1e40af'
+          padding: 16,
+          background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+          borderRadius: 12,
+          border: '2px solid #93c5fd',
+          boxShadow: '0 2px 8px rgba(59, 130, 246, 0.1)'
         }}>
-          <strong>Tips:</strong> Drag pieces from palettes to board - Drag between squares to move -
-          <strong> Drag to trash bin to remove</strong> - Right-click to remove - Shift+drag to copy -
-          <strong style={{ color: '#dc2626' }}> Ctrl/Cmd+Click to multi-select - Delete key to remove selected</strong> -
-          Position rules enforced (1 king per color, max 8 pawns, etc.)
+          <div style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: '#1e40af',
+            marginBottom: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            <span style={{ fontSize: 18 }}>💡</span> Quick Tips
+          </div>
+          <div style={{
+            fontSize: 13,
+            color: '#1e3a8a',
+            lineHeight: 1.8
+          }}>
+            <div style={{ marginBottom: 6 }}>
+              <strong>🖱️ Drag & Drop:</strong> Drag pieces from palettes to board • Move between squares • Drag to 🗑️ trash bin to remove
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              <strong>⌨️ Keyboard:</strong> Right-click to remove • Shift+Drag to copy • <span style={{ color: '#dc2626', fontWeight: 700 }}>Ctrl/Cmd+Click</span> to multi-select • <span style={{ color: '#dc2626', fontWeight: 700 }}>Delete</span> to remove selected
+            </div>
+            <div>
+              <strong>✅ Rules:</strong> 1 king per color • Max 8 pawns per side • No pawns on ranks 1/8 • Max 16 pieces per side
+            </div>
+          </div>
         </div>
       </div>
       </div>
@@ -1216,7 +1419,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
   );
 }
 
-function ToolbarBtn({ children, disabled, onClick, style }) {
+function ToolbarBtn({ children, disabled, onClick, style, icon }) {
   return (
     <button
       disabled={disabled}
@@ -1233,6 +1436,9 @@ function ToolbarBtn({ children, disabled, onClick, style }) {
         transition: 'all 0.2s ease',
         boxShadow: disabled ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
         opacity: disabled ? 0.5 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
         ...style
       }}
       onMouseEnter={(e) => {
@@ -1245,34 +1451,25 @@ function ToolbarBtn({ children, disabled, onClick, style }) {
       onMouseLeave={(e) => {
         if (!disabled) {
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-          e.currentTarget.style.borderColor = '#d1d5db';
+          e.currentTarget.style.boxShadow = style?.boxShadow || '0 2px 4px rgba(0,0,0,0.1)';
+          e.currentTarget.style.borderColor = style?.borderColor || '#d1d5db';
         }
       }}
     >
+      {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
       {children}
     </button>
   );
 }
 
 function PieceStrip({ title, items, onDragStart, color, pieceTheme }) {
+  const icon = color === 'white' ? '⚪' : '⚫';
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
       gap: 8
     }}>
-      <div style={{
-        fontSize: 12,
-        fontWeight: 700,
-        color: '#6b7280',
-        textAlign: 'center',
-        marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      }}>
-        {title}
-      </div>
       {items.map((p) => (
         <div
           key={p}
