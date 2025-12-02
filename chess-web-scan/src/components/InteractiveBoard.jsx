@@ -241,7 +241,10 @@ export default function InteractiveBoard({
                       : boardColors.dark,
             cursor: piece && piece.color === chess.turn() ? 'pointer' : 'default',
             opacity: isDragging ? 0.5 : 1,
-            transition: 'background 0.2s'
+            transition: 'background 0.2s, box-shadow 0.2s',
+            border: isLastMoveSquare ? '4px solid #FFA500' : 'none',
+            boxShadow: isLastMoveSquare ? '0 0 20px rgba(255, 165, 0, 0.6), inset 0 0 20px rgba(255, 165, 0, 0.3)' : 'none',
+            boxSizing: 'border-box'
           }}
         >
           {/* Coordinates */}
