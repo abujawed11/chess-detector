@@ -121,6 +121,9 @@ export default function App(){
       setOverlayURL(json.overlay_png_base64)
       setStage('result')
       console.log('Detection result:', json)
+
+      // ✅ DIRECTLY open Board Editor (skip result page)
+      setShowEditor(true)
     } catch(err){
       console.error('❌ Error:', err)
       alert(err.message)
@@ -178,6 +181,119 @@ export default function App(){
     setCurrentPage('scanner')
   }
 
+  // Helper function to validate FEN
+  const isValidFEN = (fenString) => {
+    if (!fenString || typeof fenString !== 'string') return false;
+    const trimmed = fenString.trim();
+    if (!trimmed) return false;
+    // Valid FEN must have exactly 6 space-delimited fields
+    const fields = trimmed.split(' ');
+    return fields.length === 6 && fields[0].length > 0;
+  };
+
+  // Floating Quick Nav Component
+  const FloatingQuickNav = () => {
+    // Only show on scanner, editor, or analysis pages
+    const showQuickNav = currentPage === 'scanner' || showEditor || currentPage === 'analysis';
+    if (!showQuickNav) return null;
+
+    const hasValidFen = isValidFEN(fen);
+
+    return (
+      <div style={{
+        position: 'fixed',
+        bottom: 20,
+        right: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        zIndex: 1000,
+        background: 'rgba(31, 41, 55, 0.95)',
+        padding: 12,
+        borderRadius: 12,
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+        border: '2px solid #4b5563'
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 'bold', color: '#9ca3af', marginBottom: 4, textAlign: 'center' }}>
+          QUICK NAV
+        </div>
+        <button
+          onClick={() => {
+            setShowEditor(false);
+            setCurrentPage('scanner');
+          }}
+          style={{
+            padding: '10px 16px',
+            background: (currentPage === 'scanner' && !showEditor) ? '#8b5cf6' : '#374151',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: 13,
+            transition: 'all 0.2s',
+            minWidth: 100
+          }}
+        >
+          📷 Scanner
+        </button>
+        <button
+          onClick={() => {
+            if (hasValidFen) {
+              setShowEditor(true);
+              setCurrentPage('scanner');
+            } else {
+              alert('Please scan an image first to use the editor');
+            }
+          }}
+          disabled={!hasValidFen}
+          style={{
+            padding: '10px 16px',
+            background: showEditor ? '#8b5cf6' : '#374151',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            cursor: hasValidFen ? 'pointer' : 'not-allowed',
+            fontWeight: 'bold',
+            fontSize: 13,
+            opacity: hasValidFen ? 1 : 0.5,
+            transition: 'all 0.2s',
+            minWidth: 100
+          }}
+        >
+          ✏️ Editor
+        </button>
+        <button
+          onClick={() => {
+            if (hasValidFen) {
+              setAnalysisFen(fen);
+              setShowEditor(false);
+              setCurrentPage('analysis');
+            } else {
+              alert('Please scan an image first to analyze');
+            }
+          }}
+          disabled={!hasValidFen}
+          style={{
+            padding: '10px 16px',
+            background: (currentPage === 'analysis' && !showEditor) ? '#8b5cf6' : '#374151',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            cursor: hasValidFen ? 'pointer' : 'not-allowed',
+            fontWeight: 'bold',
+            fontSize: 13,
+            opacity: hasValidFen ? 1 : 0.5,
+            transition: 'all 0.2s',
+            minWidth: 100
+          }}
+        >
+          🔍 Analysis
+        </button>
+      </div>
+    );
+  };
+
   // Show Home page
   if (currentPage === 'home') {
     return <Home onNavigate={setCurrentPage} />;
@@ -186,13 +302,16 @@ export default function App(){
   // Show board editor if active
   if (showEditor) {
     return (
-      <BoardEditor
-        initialFen={fen}
-        onDone={handleEditorDone}
-        onCancel={handleEditorCancel}
-        onAnalyze={handleEditorAnalyze}
-        overlayImage={overlayURL}
-      />
+      <>
+        <BoardEditor
+          initialFen={fen}
+          onDone={handleEditorDone}
+          onCancel={handleEditorCancel}
+          onAnalyze={handleEditorAnalyze}
+          overlayImage={overlayURL}
+        />
+        <FloatingQuickNav />
+      </>
     )
   }
 
@@ -227,6 +346,7 @@ export default function App(){
           </div>
         </nav>
         <Analysis initialFen={analysisFen} onEditPosition={handleOpenEditor} />
+        <FloatingQuickNav />
       </>
     );
   }
@@ -544,8 +664,8 @@ export default function App(){
       {stage === 'adjust' && corners && !busy && (
         <div>
           <h3>Step 1: Adjust Board Corners</h3>
-          <p className="muted">Drag the colored circles to match the 4 corners of your chessboard, then click "Generate FEN".</p>
-          <CornerAdjuster 
+          <p className="muted">Drag the colored circles to match the 4 corners of your chessboard, then click "Generate FEN" to open the Board Editor.</p>
+          <CornerAdjuster
             imageSrc={imgURL}
             initialCorners={corners}
             onCornersChange={handleCornersChange}
@@ -611,9 +731,10 @@ export default function App(){
 
       <hr style={{margin:'24px 0'}}/>
       <small className="muted">
-        <strong>How to use:</strong> Upload an image → Adjust the 4 corner points to frame your board → Click "Generate FEN" → Copy the result!
+        <strong>How to use:</strong> Upload an image → Adjust the 4 corner points to frame your board → Click "Generate FEN" → Edit in Board Editor!
       </small>
       </div>
+      <FloatingQuickNav />
     </>
   )
 }
