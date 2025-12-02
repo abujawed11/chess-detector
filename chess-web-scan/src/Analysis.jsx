@@ -646,7 +646,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
 
     // Determine delay - 5 seconds for computer vs computer, otherwise 2 seconds
-    const delay = (whitePlayer === 'computer' && blackPlayer === 'computer') ? 5000 : computerDelay;
+    const delay = (whitePlayer === 'computer' && blackPlayer === 'computer') ? 2000 : computerDelay;
 
     // Clear any existing timeout
     if (computerMoveTimeoutRef.current) {
@@ -1357,20 +1357,24 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 </label>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => setWhitePlayer('human')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
-                      ${whitePlayer === 'human'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
+                      whitePlayer === 'human'
+                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
+                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                    }`}
                   >
                     👤 Human
                   </button>
                   <button
+                    type="button"
                     onClick={() => setWhitePlayer('computer')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
-                      ${whitePlayer === 'computer'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
+                      whitePlayer === 'computer'
+                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
+                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                    }`}
                   >
                     🤖 Computer
                   </button>
@@ -1384,20 +1388,24 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 </label>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => setBlackPlayer('human')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
-                      ${blackPlayer === 'human'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
+                      blackPlayer === 'human'
+                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
+                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                    }`}
                   >
                     👤 Human
                   </button>
                   <button
+                    type="button"
                     onClick={() => setBlackPlayer('computer')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-semibold transition
-                      ${blackPlayer === 'computer'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
+                      blackPlayer === 'computer'
+                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
+                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                    }`}
                   >
                     🤖 Computer
                   </button>
@@ -1426,12 +1434,14 @@ export default function Analysis({ initialFen, onEditPosition }) {
             {/* Action buttons */}
             <div className="mt-6 flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowPlayComputerModal(false)}
                 className="flex-1 rounded-lg bg-slate-200 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-300 transition"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={startPlayComputerMode}
                 className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 transition"
               >
