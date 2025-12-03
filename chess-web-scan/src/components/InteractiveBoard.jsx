@@ -17,7 +17,8 @@ export default function InteractiveBoard({
   moveBadge = null, // { square: 'e4', classification: 'brilliant', label: 'Brilliant' }
   lastMove = null, // { from: 'e2', to: 'e4' }
   tacticalMotifs = [], // Array of { type, square, icon, color }
-  disabled = false // Disable user input (for computer moves)
+  disabled = false, // Disable user input (for computer moves)
+  externalMove = null // { from, to, animate: true } - for computer moves with animation
 }) {
   const [chess] = useState(new Chess(fen));
   const [draggedPiece, setDraggedPiece] = useState(null);
@@ -68,6 +69,57 @@ export default function InteractiveBoard({
     }
     return null;
   }, [getPieceAt]);
+
+  // Handle external moves (computer moves with animation)
+  useEffect(() => {
+    if (externalMove && externalMove.animate && externalMove.from && externalMove.to) {
+      // Use piece from externalMove if provided, otherwise get from board
+      const piece = externalMove.piece || getPieceAt(externalMove.from);
+      const capturedPieceData = externalMove.captured ? getPieceAt(externalMove.to) : null;
+
+      // Set up animation
+      setAnimatingMove({ from: externalMove.from, to: externalMove.to, piece });
+      if (capturedPieceData) {
+        setCapturedPiece({ square: externalMove.to, piece: capturedPieceData });
+      }
+
+      // Clear animation and play sound after animation duration
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+
+      animationTimeoutRef.current = setTimeout(() => {
+        // Check the current FEN to determine what sound to play
+        try {
+          const tempGame = new Chess(externalMove.newFen || fen);
+          const isCastle = externalMove.flags && (externalMove.flags.includes('k') || externalMove.flags.includes('q'));
+          const isPromotion = externalMove.flags && externalMove.flags.includes('p');
+
+          // Play sound based on move type
+          if (tempGame.isCheckmate()) {
+            soundManager.playCheckmate();
+          } else if (tempGame.inCheck()) {
+            soundManager.playCheck();
+          } else if (isCastle) {
+            soundManager.playCastle();
+          } else if (isPromotion) {
+            soundManager.playPromotion();
+          } else if (externalMove.captured) {
+            soundManager.playCapture();
+          } else {
+            soundManager.playMove();
+          }
+        } catch (e) {
+          // Fallback to move sound
+          soundManager.playMove();
+        }
+
+        // Clear animation state
+        setAnimatingMove(null);
+        setCapturedPiece(null);
+      }, 300);
+    }
+  }, [externalMove, fen, getPieceAt, onMove]);
 
   // Animate a move and play appropriate sound
   const animateAndExecuteMove = useCallback((from, to, moveObj) => {
@@ -302,6 +354,7 @@ export default function InteractiveBoard({
       const isAnimatingFrom = animatingMove && animatingMove.from === square;
       const isAnimatingTo = animatingMove && animatingMove.to === square;
       const isCaptureSquare = capturedPiece && capturedPiece.square === square;
+      const shouldHidePiece = isAnimatingFrom || isAnimatingTo; // Hide piece during animation
 
       squares.push(
         <div
@@ -403,8 +456,8 @@ export default function InteractiveBoard({
             </div>
           )}
 
-          {/* Piece - hide if animating from this square */}
-          {piece && !isAnimatingFrom && (
+          {/* Piece - hide if animating from/to this square */}
+          {piece && !shouldHidePiece && (
             <img
               draggable
               onDragStart={(e) => handleDragStart(e, square)}
@@ -1340,6 +1393,9 @@ export default function InteractiveBoard({
     const fromCoords = squareToCoords(animatingMove.from);
     const toCoords = squareToCoords(animatingMove.to);
     const piece = animatingMove.piece;
+
+    // Safety check - if piece is null, don't render
+    if (!piece) return null;
 
     return (
       <div

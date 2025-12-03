@@ -90,6 +90,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
   // Play Computer mode state
   const [playComputerMode, setPlayComputerMode] = useState(false);
+  const [externalMove, setExternalMove] = useState(null); // For animating computer moves
   const [showPlayComputerModal, setShowPlayComputerModal] = useState(false);
   const [whitePlayer, setWhitePlayer] = useState('human'); // 'human' or 'computer'
   const [blackPlayer, setBlackPlayer] = useState('computer'); // 'human' or 'computer'
@@ -612,8 +613,32 @@ export default function Analysis({ initialFen, onEditPosition }) {
         const moveResult = tempGame.move({ from, to, promotion });
 
         if (moveResult) {
-          // Execute the move through handleMove
-          await handleMove(moveResult, tempGame.fen());
+          // Capture piece data before FEN changes
+          const movingPiece = moveResult.color === 'w'
+            ? { type: moveResult.piece, color: 'w' }
+            : { type: moveResult.piece, color: 'b' };
+
+          // Update the FEN immediately (for visual consistency)
+          setCurrentFen(tempGame.fen());
+          setCurrentMoveIndex(moves.length);
+
+          // Trigger animation in InteractiveBoard
+          setExternalMove({
+            from,
+            to,
+            animate: true,
+            flags: moveResult.flags,
+            captured: moveResult.captured,
+            piece: movingPiece, // Include piece data
+            moveResult, // Pass the move result
+            newFen: tempGame.fen() // Pass the new FEN
+          });
+
+          // Delay heavy processing until after animation completes
+          setTimeout(async () => {
+            await handleMove(moveResult, tempGame.fen());
+            setExternalMove(null);
+          }, 320); // After animation (300ms) + small buffer
         }
       }
     } catch (err) {
@@ -1078,6 +1103,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 hoverMove={playComputerMode ? null : hoverMove}
                 lastMove={lastMove}
                 moveBadge={moveBadge}
+                externalMove={externalMove}
                 disabled={playComputerMode && (
                   (turn === 'w' && whitePlayer === 'computer') ||
                   (turn === 'b' && blackPlayer === 'computer')
