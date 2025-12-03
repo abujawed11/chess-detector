@@ -558,12 +558,12 @@ export default function PlayComputer() {
               {turn === playerColor && ' (You)'}
               {turn !== playerColor && ' (Computer)'}
             </span>
-            {isComputerThinking && (
+            {/* {isComputerThinking && (
               <span className="flex items-center gap-2 rounded-lg bg-blue-100 px-3 py-1.5 text-blue-700 font-semibold">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
                 Thinking...
               </span>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -713,19 +713,6 @@ export default function PlayComputer() {
 
         {/* Right panel */}
         <div className="w-full max-w-[400px] space-y-3 xl:sticky xl:top-4 xl:w-[400px] xl:shrink-0">
-          {/* Computer thinking indicator */}
-          {isComputerThinking && (
-            <div className="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 shadow">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
-                <div>
-                  <div className="font-bold text-blue-700">Computer is thinking...</div>
-                  <div className="text-sm text-blue-600">Depth: {difficulty.depth}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Game info */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow">
             <h3 className="mb-3 font-bold text-slate-700">Game Info</h3>
@@ -781,6 +768,38 @@ export default function PlayComputer() {
           </div>
         </div>
       </div>
+
+      {/* Computer thinking indicator - Fixed position overlay (no layout shift) */}
+      {isComputerThinking && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slideIn">
+          <div className="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
+              <div>
+                <div className="font-bold text-blue-700">Computer is thinking...</div>
+                <div className="text-sm text-blue-600">Depth: {difficulty.depth}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add slide-in animation */}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

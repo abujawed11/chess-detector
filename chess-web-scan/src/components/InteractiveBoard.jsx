@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js/dist/esm/chess.js';
 import { getPieceImageUrl } from '../utils/chessUtils';
 import { useTheme } from '../context/ThemeContext';
+import soundManager from '../utils/soundManager';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
@@ -26,8 +27,18 @@ export default function InteractiveBoard({
   const [legalMoves, setLegalMoves] = useState([]);
   const [promotionDialog, setPromotionDialog] = useState(null); // { from, to }
 
+  // Animation state
+  const [animatingMove, setAnimatingMove] = useState(null); // { from, to, piece }
+  const [capturedPiece, setCapturedPiece] = useState(null); // { square, piece } for capture animation
+  const animationTimeoutRef = useRef(null);
+
   // Get theme colors from context
   const { boardColors, pieceSet } = useTheme();
+
+  // Resume audio context on first user interaction
+  useEffect(() => {
+    soundManager.resume();
+  }, []);
 
   // Update chess position when FEN changes
   if (chess.fen() !== fen) {
@@ -44,6 +55,74 @@ export default function InteractiveBoard({
     return board[row][file];
   }, [board]);
 
+  // Get king square for a color
+  const getKingSquare = useCallback((color) => {
+    for (let rank = 8; rank >= 1; rank--) {
+      for (const file of FILES) {
+        const square = `${file}${rank}`;
+        const piece = getPieceAt(square);
+        if (piece && piece.type === 'k' && piece.color === color) {
+          return square;
+        }
+      }
+    }
+    return null;
+  }, [getPieceAt]);
+
+  // Animate a move and play appropriate sound
+  const animateAndExecuteMove = useCallback((from, to, moveObj) => {
+    const piece = getPieceAt(from);
+    const capturedPieceData = getPieceAt(to);
+
+    // Set up animation
+    setAnimatingMove({ from, to, piece });
+    if (capturedPieceData) {
+      setCapturedPiece({ square: to, piece: capturedPieceData });
+    }
+
+    // Clear animation and execute move after animation duration
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+    }
+
+    animationTimeoutRef.current = setTimeout(() => {
+      // NOW execute the move on the chess instance
+      const moveResult = chess.move(moveObj);
+
+      if (moveResult && onMove) {
+        onMove(moveResult, chess.fen());
+      }
+
+      // Play sound based on move type
+      if (chess.isCheckmate()) {
+        soundManager.playCheckmate();
+      } else if (chess.inCheck()) {
+        soundManager.playCheck();
+      } else if (moveResult && (moveResult.flags.includes('k') || moveResult.flags.includes('q'))) {
+        soundManager.playCastle();
+      } else if (moveResult && moveResult.flags.includes('p')) {
+        soundManager.playPromotion();
+      } else if (capturedPieceData) {
+        soundManager.playCapture();
+      } else {
+        soundManager.playMove();
+      }
+
+      // Clear animation state
+      setAnimatingMove(null);
+      setCapturedPiece(null);
+    }, 300); // Animation duration
+  }, [chess, onMove, getPieceAt]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Check if move is a promotion
   const isPromotion = useCallback((from, to) => {
     const piece = getPieceAt(from);
@@ -58,18 +137,16 @@ export default function InteractiveBoard({
     if (!promotionDialog) return;
 
     const { from, to } = promotionDialog;
-    const moveResult = chess.move({ from, to, promotion: piece });
 
-    if (moveResult && onMove) {
-      onMove(moveResult, chess.fen());
-    }
+    // Animate and execute the promotion move
+    animateAndExecuteMove(from, to, { from, to, promotion: piece });
 
     setPromotionDialog(null);
     setSelectedSquare(null);
     setLegalMoves([]);
     setDraggedPiece(null);
     setDragFrom(null);
-  }, [promotionDialog, chess, onMove]);
+  }, [promotionDialog, animateAndExecuteMove]);
 
   // Handle square click
   const handleSquareClick = useCallback((square) => {
@@ -85,10 +162,8 @@ export default function InteractiveBoard({
         if (isPromotion(selectedSquare, square)) {
           setPromotionDialog({ from: selectedSquare, to: square });
         } else {
-          const moveResult = chess.move({ from: selectedSquare, to: square });
-          if (moveResult && onMove) {
-            onMove(moveResult, chess.fen());
-          }
+          // Animate and execute the move
+          animateAndExecuteMove(selectedSquare, square, { from: selectedSquare, to: square });
           setSelectedSquare(null);
           setLegalMoves([]);
         }
@@ -113,7 +188,7 @@ export default function InteractiveBoard({
         setLegalMoves(moves.map(m => m.to));
       }
     }
-  }, [selectedSquare, chess, onMove, getPieceAt, isPromotion, disabled]);
+  }, [selectedSquare, chess, getPieceAt, isPromotion, disabled, animateAndExecuteMove]);
 
   // Drag handlers
   const handleDragStart = useCallback((e, square) => {
@@ -158,10 +233,8 @@ export default function InteractiveBoard({
       if (isPromotion(dragFrom, square)) {
         setPromotionDialog({ from: dragFrom, to: square });
       } else {
-        const moveResult = chess.move({ from: dragFrom, to: square });
-        if (moveResult && onMove) {
-          onMove(moveResult, chess.fen());
-        }
+        // Animate and execute the move
+        animateAndExecuteMove(dragFrom, square, { from: dragFrom, to: square });
         setDraggedPiece(null);
         setDragFrom(null);
         setSelectedSquare(null);
@@ -171,7 +244,7 @@ export default function InteractiveBoard({
       setDraggedPiece(null);
       setDragFrom(null);
     }
-  }, [dragFrom, chess, onMove, isPromotion]);
+  }, [dragFrom, chess, isPromotion, animateAndExecuteMove]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedPiece(null);
@@ -201,6 +274,12 @@ export default function InteractiveBoard({
     return { x, y };
   }, [flipped]);
 
+  // Check detection
+  const whiteKingSquare = getKingSquare('w');
+  const blackKingSquare = getKingSquare('b');
+  const whiteInCheck = chess.turn() === 'w' && chess.inCheck();
+  const blackInCheck = chess.turn() === 'b' && chess.inCheck();
+
   // Render squares
   const squares = [];
   const displayRanks = flipped ? [...RANKS].reverse() : RANKS;
@@ -219,6 +298,10 @@ export default function InteractiveBoard({
       const isDragging = dragFrom === square;
       const isLastMoveSquare = lastMove && (square === lastMove.from || square === lastMove.to);
       const hasBadge = moveBadge && moveBadge.square === square;
+      const isKingInCheck = (whiteInCheck && square === whiteKingSquare) || (blackInCheck && square === blackKingSquare);
+      const isAnimatingFrom = animatingMove && animatingMove.from === square;
+      const isAnimatingTo = animatingMove && animatingMove.to === square;
+      const isCaptureSquare = capturedPiece && capturedPiece.square === square;
 
       squares.push(
         <div
@@ -228,23 +311,34 @@ export default function InteractiveBoard({
           onDrop={(e) => handleDrop(e, square)}
           style={{
             position: 'relative',
-            background: isSelected
-              ? boardColors.selected
-              : isLastMoveSquare
-                ? (isLight ? boardColors.lastMoveLight : boardColors.lastMoveDark)
-                : isHighlighted
-                  ? boardColors.highlight
-                  : isHovered && dragFrom
-                    ? boardColors.hover
-                    : isLight
-                      ? boardColors.light
-                      : boardColors.dark,
+            background: isKingInCheck
+              ? '#ff4444' // Red background for king in check
+              : isSelected
+                ? boardColors.selected
+                : isLastMoveSquare
+                  ? (isLight ? boardColors.lastMoveLight : boardColors.lastMoveDark)
+                  : isHighlighted
+                    ? boardColors.highlight
+                    : isHovered && dragFrom
+                      ? boardColors.hover
+                      : isLight
+                        ? boardColors.light
+                        : boardColors.dark,
             cursor: piece && piece.color === chess.turn() ? 'pointer' : 'default',
             opacity: isDragging ? 0.5 : 1,
             transition: 'background 0.2s, box-shadow 0.2s',
-            border: isLastMoveSquare ? '4px solid #FFA500' : 'none',
-            boxShadow: isLastMoveSquare ? '0 0 20px rgba(255, 165, 0, 0.6), inset 0 0 20px rgba(255, 165, 0, 0.3)' : 'none',
-            boxSizing: 'border-box'
+            border: isKingInCheck
+              ? '4px solid #cc0000'
+              : isLastMoveSquare
+                ? '4px solid #FFA500'
+                : 'none',
+            boxShadow: isKingInCheck
+              ? '0 0 30px rgba(255, 0, 0, 0.8), inset 0 0 30px rgba(255, 0, 0, 0.4)'
+              : isLastMoveSquare
+                ? '0 0 20px rgba(255, 165, 0, 0.6), inset 0 0 20px rgba(255, 165, 0, 0.3)'
+                : 'none',
+            boxSizing: 'border-box',
+            animation: isKingInCheck ? 'checkPulse 1.5s infinite' : 'none'
           }}
         >
           {/* Coordinates */}
@@ -309,8 +403,8 @@ export default function InteractiveBoard({
             </div>
           )}
 
-          {/* Piece */}
-          {piece && (
+          {/* Piece - hide if animating from this square */}
+          {piece && !isAnimatingFrom && (
             <img
               draggable
               onDragStart={(e) => handleDragStart(e, square)}
@@ -324,7 +418,9 @@ export default function InteractiveBoard({
                 padding: '8%',
                 cursor: piece.color === chess.turn() ? 'grab' : 'default',
                 userSelect: 'none',
-                pointerEvents: piece.color === chess.turn() ? 'auto' : 'none'
+                pointerEvents: piece.color === chess.turn() ? 'auto' : 'none',
+                opacity: isCaptureSquare ? 0 : 1,
+                transition: isCaptureSquare ? 'opacity 0.3s ease-out' : 'none'
               }}
             />
           )}
@@ -1237,6 +1333,47 @@ export default function InteractiveBoard({
   };
 
 
+  // Render animating piece
+  const renderAnimatingPiece = () => {
+    if (!animatingMove) return null;
+
+    const fromCoords = squareToCoords(animatingMove.from);
+    const toCoords = squareToCoords(animatingMove.to);
+    const piece = animatingMove.piece;
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          width: GRID_SIZE / 8,
+          height: GRID_SIZE / 8,
+          top: BOARD_PADDING,
+          left: BOARD_PADDING,
+          transform: `translate(${fromCoords.x - (GRID_SIZE / 8 / 2)}px, ${fromCoords.y - (GRID_SIZE / 8 / 2)}px)`,
+          animation: `moveAnimation 0.3s ease-out forwards`,
+          '--from-x': `${fromCoords.x - (GRID_SIZE / 8 / 2)}px`,
+          '--from-y': `${fromCoords.y - (GRID_SIZE / 8 / 2)}px`,
+          '--to-x': `${toCoords.x - (GRID_SIZE / 8 / 2)}px`,
+          '--to-y': `${toCoords.y - (GRID_SIZE / 8 / 2)}px`,
+          pointerEvents: 'none',
+          zIndex: 100
+        }}
+      >
+        <img
+          src={getPieceImageUrl(piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase(), pieceSet.id)}
+          alt={piece.type}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            padding: '8%',
+            filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5))'
+          }}
+        />
+      </div>
+    );
+  };
+
   return (
     <div style={{
       width: 680,
@@ -1260,6 +1397,7 @@ export default function InteractiveBoard({
       }}>
         {squares}
       </div>
+      {renderAnimatingPiece()}
       {renderHoverArrow()}
       {renderArrow()}
       {renderTacticalMotifs()}
@@ -1385,6 +1523,26 @@ export default function InteractiveBoard({
           100% {
             opacity: 1;
             transform: scale(1) translateY(0);
+          }
+        }
+
+        @keyframes checkPulse {
+          0%, 100% {
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8), inset 0 0 30px rgba(255, 0, 0, 0.4);
+            border-color: #cc0000;
+          }
+          50% {
+            box-shadow: 0 0 50px rgba(255, 0, 0, 1), inset 0 0 50px rgba(255, 0, 0, 0.6);
+            border-color: #ff0000;
+          }
+        }
+
+        @keyframes moveAnimation {
+          0% {
+            transform: translate(var(--from-x), var(--from-y));
+          }
+          100% {
+            transform: translate(var(--to-x), var(--to-y));
           }
         }
       `}</style>

@@ -822,6 +822,43 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
   }, [game, moves, startFen, analyzeMoveType]);
 
+  // Keyboard shortcuts for undo/redo and navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Z or Cmd+Z for Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (currentMoveIndex > -1) {
+          navigateToMove(currentMoveIndex - 1);
+        }
+      }
+      // Ctrl+Y or Cmd+Shift+Z for Redo
+      if (((e.ctrlKey || e.metaKey) && e.key === 'y') ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        if (currentMoveIndex < moves.length - 1) {
+          navigateToMove(currentMoveIndex + 1);
+        }
+      }
+      // Arrow keys for navigation
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentMoveIndex > -1) {
+          navigateToMove(currentMoveIndex - 1);
+        }
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (currentMoveIndex < moves.length - 1) {
+          navigateToMove(currentMoveIndex + 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentMoveIndex, moves.length, navigateToMove]);
+
   const resetToStart = useCallback(() => {
     game.reset();
     game.load(startFen);
@@ -1070,7 +1107,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 onClick={() => navigateToMove(currentMoveIndex - 1)}
                 disabled={currentMoveIndex === -1}
                 className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-                title="Previous"
+                title="Previous (Undo)"
               >
                 ◀
               </button>
@@ -1078,7 +1115,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 onClick={() => navigateToMove(currentMoveIndex + 1)}
                 disabled={currentMoveIndex === moves.length - 1}
                 className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-                title="Next"
+                title="Next (Redo)"
               >
                 ▶
               </button>
@@ -1086,9 +1123,29 @@ export default function Analysis({ initialFen, onEditPosition }) {
                 onClick={() => navigateToMove(moves.length - 1)}
                 disabled={currentMoveIndex === moves.length - 1}
                 className="min-w-[60px] rounded-lg bg-slate-900 px-5 py-3 text-lg font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-                title="Last"
+                title="Last move"
               >
                 ⏭
+              </button>
+            </div>
+
+            {/* Undo/Redo quick access buttons */}
+            <div className="flex w-[680px] justify-center gap-2 mt-2">
+              <button
+                onClick={() => navigateToMove(currentMoveIndex - 1)}
+                disabled={currentMoveIndex === -1}
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300 disabled:text-slate-500 transition-colors hover:bg-amber-700 disabled:hover:bg-slate-300"
+                title="Undo last move (Ctrl+Z)"
+              >
+                ↶ Undo
+              </button>
+              <button
+                onClick={() => navigateToMove(currentMoveIndex + 1)}
+                disabled={currentMoveIndex === moves.length - 1}
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300 disabled:text-slate-500 transition-colors hover:bg-green-700 disabled:hover:bg-slate-300"
+                title="Redo move (Ctrl+Y)"
+              >
+                ↷ Redo
               </button>
             </div>
 
@@ -1338,7 +1395,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
         <ul className="ml-5 mt-2 list-disc space-y-1">
           <li><strong>Auto-analyze</strong> classifies moves as you play.</li>
           <li><strong>Show Best Move</strong> draws a green arrow for the engine's choice.</li>
-          <li><strong>Get Hint</strong> shows a one-time arrow for the current position.</li>
+          <li><strong>Undo/Redo</strong> - Use buttons or keyboard shortcuts (Ctrl+Z / Ctrl+Y)</li>
+          <li><strong>Arrow Keys</strong> - Navigate through move history (← / →)</li>
+          <li><strong>Animations & Sounds</strong> - Pieces animate smoothly with sound effects!</li>
+          <li><strong>Check Detection</strong> - King glows red when in check</li>
           <li>Click history to jump; the evaluation bar shows the advantage.</li>
         </ul>
       </div>
@@ -1361,8 +1421,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     onClick={() => setWhitePlayer('human')}
                     className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
                       whitePlayer === 'human'
-                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
-                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
                     }`}
                   >
                     👤 Human
@@ -1372,8 +1432,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     onClick={() => setWhitePlayer('computer')}
                     className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
                       whitePlayer === 'computer'
-                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
-                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
                     }`}
                   >
                     🤖 Computer
@@ -1392,8 +1452,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     onClick={() => setBlackPlayer('human')}
                     className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
                       blackPlayer === 'human'
-                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
-                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
                     }`}
                   >
                     👤 Human
@@ -1403,8 +1463,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     onClick={() => setBlackPlayer('computer')}
                     className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
                       blackPlayer === 'computer'
-                        ? '!bg-blue-600 !text-white !border-blue-800 shadow-lg'
-                        : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400'
+                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
                     }`}
                   >
                     🤖 Computer
