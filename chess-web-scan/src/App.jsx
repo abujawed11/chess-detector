@@ -94,6 +94,72 @@ export default function App(){
     }
   }
 
+  async function onPasteFromClipboard(){
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      let imageBlob = null
+
+      for (const item of clipboardItems) {
+        // Check if clipboard contains an image
+        const imageTypes = item.types.filter(type => type.startsWith('image/'))
+        if (imageTypes.length > 0) {
+          imageBlob = await item.getType(imageTypes[0])
+          break
+        }
+      }
+
+      if (!imageBlob) {
+        alert('No image found in clipboard. Please copy an image first.')
+        return
+      }
+
+      // Convert blob to File object
+      const file = new File([imageBlob], 'clipboard-image.png', { type: imageBlob.type })
+
+      // Process the file same as file upload
+      setFile(file)
+      setFEN('')
+      setOverlayURL('')
+      setCorners(null)
+      const url = URL.createObjectURL(file)
+      setImgURL(url)
+
+      // Auto-detect board corners
+      setBusy(true)
+      setStage('adjust')
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('flip_ranks', 'false')
+        const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
+        const json = await res.json()
+        if(res.ok && json.board_corners) {
+          setCorners(json.board_corners)
+        } else {
+          // Fallback: set corners to image edges
+          const img = new Image()
+          img.onload = () => {
+            setCorners([[0,0], [img.width, 0], [img.width, img.height], [0, img.height]])
+          }
+          img.src = url
+        }
+      } catch(err) {
+        console.error('Auto-detect failed:', err)
+        // Fallback: set corners to image edges
+        const img = new Image()
+        img.onload = () => {
+          setCorners([[0,0], [img.width, 0], [img.width, img.height], [0, img.height]])
+        }
+        img.src = url
+      } finally {
+        setBusy(false)
+      }
+    } catch(err) {
+      console.error('Clipboard read failed:', err)
+      alert('Failed to read from clipboard. Make sure you have copied an image and granted clipboard permissions.')
+    }
+  }
+
   async function onGenerateFEN(adjustedCorners){
     if(!file) return
     setBusy(true)
@@ -640,7 +706,11 @@ export default function App(){
           <input type="file" accept="image/*" style={{display:'none'}} onChange={onPick} ref={inputRef} />
           {stage === 'upload' ? 'Choose image…' : 'Choose different image…'}
         </label>
-        
+
+        <button onClick={onPasteFromClipboard} disabled={busy}>
+          Paste from Clipboard
+        </button>
+
         {stage !== 'upload' && (
           <>
             <label style={{display:'inline-flex', alignItems:'center', gap:8}} title="Check this if white pieces are at the TOP of your image">
