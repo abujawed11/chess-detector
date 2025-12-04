@@ -783,7 +783,8 @@ export default function PlayComputer() {
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
               <div>
                 <div className="font-bold text-blue-700">Computer is thinking...</div>
-                <div className="text-sm text-blue-600">Depth: {difficulty.depth}</div>
+                <div className="text-sm text-blue-600">{difficulty.name} ({difficulty.elo} ELO)</div>
+                <div className="text-xs text-blue-500">Depth: {difficulty.depth} | Skill: {difficulty.skillLevel}</div>
               </div>
             </div>
           </div>

@@ -169,7 +169,16 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
 
     try {
-      const result = await analyze(currentFen, { depth: analysisDepth, multiPV: 3 });
+      // Use computer difficulty depth when in Play Computer mode, otherwise use user's selected depth
+      const depthToUse = playComputerMode ? computerDifficulty.depth : analysisDepth;
+
+      // Reset skill level to full strength for position analysis (so engine lines show TRUE best moves)
+      // Skill level is only used when computer generates its move
+      if (playComputerMode && setSkillLevel) {
+        await setSkillLevel(20); // Full strength for analysis
+      }
+
+      const result = await analyze(currentFen, { depth: depthToUse, multiPV: 3 });
       setCurrentEval(result.evaluation);
       setStoredAnalysis(result);
       setEngineLines(result.lines || []);
@@ -181,7 +190,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
     } catch (err) {
       console.error('Analysis error:', err);
     }
-  }, [currentFen, initialized, analyze, analysisDepth, showBestMove, hintRequested]);
+  }, [currentFen, initialized, analyze, analysisDepth, showBestMove, hintRequested, playComputerMode, computerDifficulty.depth, setSkillLevel]);
 
   useEffect(() => {
     // Check if game is over before analyzing - use currentFen
@@ -489,7 +498,15 @@ export default function Analysis({ initialFen, onEditPosition }) {
         if (!isGameOverPosition) {
           try {
             console.log('🔍 Analyzing new position for engine lines...');
-            result = await analyze(newFen, { depth: analysisDepth, multiPV: 3 });
+            // Use computer difficulty depth when in Play Computer mode, otherwise use user's selected depth
+            const depthToUse = playComputerMode ? computerDifficulty.depth : analysisDepth;
+
+            // Reset skill level to full strength for position analysis (so engine lines show TRUE best moves)
+            if (playComputerMode && setSkillLevel) {
+              await setSkillLevel(20); // Full strength for analysis
+            }
+
+            result = await analyze(newFen, { depth: depthToUse, multiPV: 3 });
             console.log('✅ Position analysis complete');
           } catch (err) {
             console.error('❌ Position analysis error:', err);
@@ -591,7 +608,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
         setIsProcessingMove(false);
       }
     },
-    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove, analyzeMoveType]
+    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove, analyzeMoveType, playComputerMode, computerDifficulty.depth, setSkillLevel]
   );
 
   // Function to make computer move
@@ -1615,22 +1632,32 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
       {/* Computer thinking indicator */}
       {playComputerMode && computerThinking && (
-        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-white shadow-lg">
-          <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          <span className="font-semibold">Computer is thinking...</span>
+        <div className="fixed bottom-4 right-4 z-40 rounded-lg bg-slate-900 px-4 py-3 text-white shadow-lg">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            <span className="font-semibold">Computer is thinking...</span>
+          </div>
+          <div className="text-xs text-slate-300 ml-5">
+            {computerDifficulty.name} ({computerDifficulty.elo} ELO)
+          </div>
         </div>
       )}
 
       {/* Play Computer mode indicator */}
       {playComputerMode && !computerThinking && (
-        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-white shadow-lg">
-          <span className="font-semibold">
+        <div className="fixed bottom-4 right-4 z-40 rounded-lg bg-emerald-600 px-4 py-3 text-white shadow-lg">
+          <div className="font-semibold">
             🤖 {whitePlayer === 'computer' && blackPlayer === 'computer'
               ? 'Computer vs Computer'
               : turn === 'w'
                 ? (whitePlayer === 'computer' ? 'Computer to move' : 'Your turn (White)')
                 : (blackPlayer === 'computer' ? 'Computer to move' : 'Your turn (Black)')}
-          </span>
+          </div>
+          {(whitePlayer === 'computer' || blackPlayer === 'computer') && (
+            <div className="text-xs text-emerald-100 mt-1">
+              {computerDifficulty.name} ({computerDifficulty.elo} ELO)
+            </div>
+          )}
         </div>
       )}
     </div>
