@@ -174,6 +174,23 @@ class StockfishService {
   }
 
   /**
+   * Set Skill Level for human-like play
+   * @param {number} level - Skill level (0-20)
+   * @returns {Promise<boolean>} Success status
+   */
+  async setSkillLevel(level) {
+    return await this.browserEngine.setSkillLevel(level);
+  }
+
+  /**
+   * Reset to full strength
+   * @returns {Promise<boolean>} Success status
+   */
+  async setFullStrength() {
+    return await this.browserEngine.setFullStrength();
+  }
+
+  /**
    * Quit Stockfish
    */
   async quit() {

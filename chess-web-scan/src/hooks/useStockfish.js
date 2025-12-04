@@ -210,6 +210,30 @@ export function useStockfish() {
     setAnalyzing(false);
   }, []);
 
+  /**
+   * Set Skill Level for human-like play
+   * @param {number} level - Skill level (0-20)
+   * @returns {Promise<boolean>} Success status
+   */
+  const setSkillLevel = useCallback(async (level) => {
+    if (engineRef.current) {
+      return await engineRef.current.setSkillLevel(level);
+    }
+    console.log('Engine not initialized yet, skill level will be set when needed');
+    return false;
+  }, []);
+
+  /**
+   * Reset to full strength
+   * @returns {Promise<boolean>} Success status
+   */
+  const setFullStrength = useCallback(async () => {
+    if (engineRef.current) {
+      return await engineRef.current.setFullStrength();
+    }
+    return false;
+  }, []);
+
   return {
     initialized,
     analyzing,
@@ -217,6 +241,8 @@ export function useStockfish() {
     analyze,
     getThreadInfo,
     setThreads,
+    setSkillLevel,
+    setFullStrength,
     stop
   };
 }

@@ -60,6 +60,17 @@ function getBadgeSymbol(classification) {
   }
 }
 
+// Difficulty levels for Play Computer mode (same as PlayComputer.jsx)
+const DIFFICULTY_LEVELS = [
+  { name: 'Beginner', elo: 800, depth: 5, skillLevel: 1, description: 'Just learning - frequent blunders' },
+  { name: 'Easy', elo: 1000, depth: 8, skillLevel: 5, description: 'Casual player - makes mistakes' },
+  { name: 'Medium', elo: 1400, depth: 12, skillLevel: 10, description: 'Club player - occasional errors' },
+  { name: 'Hard', elo: 1800, depth: 16, skillLevel: 15, description: 'Advanced player - rare mistakes' },
+  { name: 'Expert', elo: 2000, depth: 18, skillLevel: 17, description: 'Tournament strength' },
+  { name: 'Master', elo: 2200, depth: 20, skillLevel: 19, description: 'Master level - very strong' },
+  { name: 'Grandmaster', elo: 2500, depth: 22, skillLevel: 20, description: 'Elite strength - nearly perfect' },
+];
+
 export default function Analysis({ initialFen, onEditPosition }) {
   const startFen = initialFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -71,7 +82,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [analyzeMoveType, setAnalyzeMoveType] = useState(false); // OFF by default
 
-  const { initialized, analyzing, analyze, error, getThreadInfo, setThreads } = useStockfish();
+  const { initialized, analyzing, analyze, error, getThreadInfo, setThreads, setSkillLevel } = useStockfish();
 
   const [currentEval, setCurrentEval] = useState(null);
   const [bestMove, setBestMove] = useState(null);
@@ -96,6 +107,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
   const [blackPlayer, setBlackPlayer] = useState('computer'); // 'human' or 'computer'
   const [computerThinking, setComputerThinking] = useState(false);
   const [computerDelay, setComputerDelay] = useState(2000); // Default 2 seconds, 5 seconds for computer vs computer
+  const [computerDifficulty, setComputerDifficulty] = useState(DIFFICULTY_LEVELS[2]); // Default: Medium
 
   const badgeTimeoutRef = useRef(null);
   const computerMoveTimeoutRef = useRef(null);
@@ -600,8 +612,13 @@ export default function Analysis({ initialFen, onEditPosition }) {
     setComputerThinking(true);
 
     try {
-      // Analyze position to get best move
-      const result = await analyze(currentFen, { depth: analysisDepth, multiPV: 1 });
+      // Set skill level for human-like play
+      if (setSkillLevel) {
+        await setSkillLevel(computerDifficulty.skillLevel);
+      }
+
+      // Analyze position to get best move using difficulty settings
+      const result = await analyze(currentFen, { depth: computerDifficulty.depth, multiPV: 1 });
 
       if (result?.bestMove) {
         const from = result.bestMove.substring(0, 2);
@@ -646,7 +663,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
     } finally {
       setComputerThinking(false);
     }
-  }, [initialized, isProcessingMove, computerThinking, currentFen, analyze, analysisDepth, handleMove]);
+  }, [initialized, isProcessingMove, computerThinking, currentFen, analyze, computerDifficulty.depth, computerDifficulty.skillLevel, handleMove, setSkillLevel]);
 
   // Effect to trigger computer moves when it's computer's turn
   useEffect(() => {
@@ -688,7 +705,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
         clearTimeout(computerMoveTimeoutRef.current);
       }
     };
-  }, [playComputerMode, initialized, isProcessingMove, computerThinking, currentFen, whitePlayer, blackPlayer, computerDelay, makeComputerMove]);
+    // Note: makeComputerMove is intentionally NOT in dependencies to avoid infinite loop
+    // The function is stable enough through useCallback with its own dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playComputerMode, initialized, isProcessingMove, computerThinking, currentFen, whitePlayer, blackPlayer, computerDelay]);
 
   // Stop play computer mode when navigating through moves
   const handlePlayComputerToggle = useCallback(() => {
@@ -1431,8 +1451,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
       {/* Play Computer Modal */}
       {showPlayComputerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-2xl">
             <h3 className="mb-4 text-xl font-bold text-slate-900">Play Computer Settings</h3>
 
             <div className="space-y-4">
@@ -1497,6 +1517,61 @@ export default function Analysis({ initialFen, onEditPosition }) {
                   </button>
                 </div>
               </div>
+
+              {/* Computer Difficulty selection */}
+              {(whitePlayer === 'computer' || blackPlayer === 'computer') && (
+                <div className="rounded-lg border-2 border-slate-300 bg-slate-50 p-4">
+                  <label className="mb-3 block text-sm font-bold text-slate-900">
+                    Computer Difficulty:
+                  </label>
+                  <div className="space-y-2">
+                    {DIFFICULTY_LEVELS.map((level) => (
+                      <button
+                        key={level.name}
+                        type="button"
+                        onClick={() => setComputerDifficulty(level)}
+                        className={`w-full rounded-lg p-3 text-left transition-all border-2 ${
+                          computerDifficulty.name === level.name
+                            ? 'bg-green-500 border-green-600 shadow-lg transform scale-[1.02]'
+                            : 'bg-white border-slate-300 hover:border-green-400 hover:shadow'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold ${
+                                computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
+                              }`}>
+                                {level.name}
+                              </span>
+                              {computerDifficulty.name === level.name && (
+                                <span className="text-white text-lg">✓</span>
+                              )}
+                            </div>
+                            <div className={`text-xs mt-0.5 ${
+                              computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-600'
+                            }`}>
+                              {level.description}
+                            </div>
+                          </div>
+                          <div className="text-right ml-3">
+                            <div className={`text-sm font-bold ${
+                              computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
+                            }`}>
+                              {level.elo}
+                            </div>
+                            <div className={`text-xs ${
+                              computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-500'
+                            }`}>
+                              ELO
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Info about delay */}
               {whitePlayer === 'computer' && blackPlayer === 'computer' && (

@@ -7,15 +7,16 @@ import InteractiveBoard from './components/InteractiveBoard';
 import EvaluationBar from './components/EvaluationBar';
 import MoveHistory from './components/MoveHistory';
 
-// ELO to depth mapping
+// ELO to depth + skill level mapping
+// Skill Level (0-20) makes Stockfish play human-like with mistakes
 const DIFFICULTY_LEVELS = [
-  { name: 'Beginner', elo: 800, depth: 4, description: 'Just learning the basics' },
-  { name: 'Easy', elo: 1000, depth: 6, description: 'Casual player' },
-  { name: 'Medium', elo: 1400, depth: 10, description: 'Club player' },
-  { name: 'Hard', elo: 1800, depth: 14, description: 'Advanced player' },
-  { name: 'Expert', elo: 2000, depth: 18, description: 'Tournament strength' },
-  { name: 'Master', elo: 2200, depth: 20, description: 'Master level' },
-  { name: 'Grandmaster', elo: 2500, depth: 22, description: 'Elite strength' },
+  { name: 'Beginner', elo: 800, depth: 5, skillLevel: 1, description: 'Just learning - frequent blunders' },
+  { name: 'Easy', elo: 1000, depth: 8, skillLevel: 5, description: 'Casual player - makes mistakes' },
+  { name: 'Medium', elo: 1400, depth: 12, skillLevel: 10, description: 'Club player - occasional errors' },
+  { name: 'Hard', elo: 1800, depth: 16, skillLevel: 15, description: 'Advanced player - rare mistakes' },
+  { name: 'Expert', elo: 2000, depth: 18, skillLevel: 17, description: 'Tournament strength' },
+  { name: 'Master', elo: 2200, depth: 20, skillLevel: 19, description: 'Master level - very strong' },
+  { name: 'Grandmaster', elo: 2500, depth: 22, skillLevel: 20, description: 'Elite strength - nearly perfect' },
 ];
 
 export default function PlayComputer() {
@@ -57,7 +58,7 @@ export default function PlayComputer() {
   //   return currentEval;
   // }, [currentEval, currentFen]);
 
-  const { initialized, analyzing, analyze, error } = useStockfish();
+  const { initialized, analyzing, analyze, error, setSkillLevel } = useStockfish();
   const computerMoveTimeoutRef = useRef(null);
 
   // Cleanup on unmount
@@ -99,6 +100,11 @@ export default function PlayComputer() {
     setIsComputerThinking(true);
 
     try {
+      // Set skill level for human-like play
+      if (setSkillLevel) {
+        await setSkillLevel(difficulty.skillLevel);
+      }
+
       // Add slight delay for better UX (feels more natural)
       await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
 
@@ -158,7 +164,7 @@ export default function PlayComputer() {
     } finally {
       setIsComputerThinking(false);
     }
-  }, [initialized, isComputerTurn, analyze, currentFen, difficulty.depth, game]);
+  }, [initialized, isComputerTurn, analyze, currentFen, difficulty.depth, difficulty.skillLevel, game, setSkillLevel, checkGameOver]);
 
   // Effect to trigger computer move when it's computer's turn
   useEffect(() => {

@@ -397,6 +397,46 @@ class BrowserStockfishService {
   }
 
   /**
+   * Set Skill Level for human-like play
+   * @param {number} level - Skill level (0-20)
+   *   0 = ~800 ELO (beginner, makes frequent blunders)
+   *   10 = ~1500 ELO (club player, occasional mistakes)
+   *   20 = ~3200+ ELO (full strength, no mistakes)
+   * @returns {Promise<boolean>} Success status
+   */
+  async setSkillLevel(level) {
+    if (!this.initialized || !this.engine) {
+      console.warn('Cannot set skill level - engine not initialized');
+      return false;
+    }
+
+    // Validate skill level (0-20)
+    const skillLevel = Math.max(0, Math.min(20, Math.floor(level)));
+
+    try {
+      console.log(`🎯 Setting Skill Level: ${skillLevel} (for human-like play)`);
+
+      // Set UCI Skill Level option
+      this.engine.setOption('Skill Level', String(skillLevel));
+      await this._waitForReady();
+
+      console.log(`✅ Skill Level set to ${skillLevel}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to set skill level:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reset to full strength (disable skill level limiting)
+   * @returns {Promise<boolean>} Success status
+   */
+  async setFullStrength() {
+    return await this.setSkillLevel(20);
+  }
+
+  /**
    * Quit Stockfish
    */
   quit() {
