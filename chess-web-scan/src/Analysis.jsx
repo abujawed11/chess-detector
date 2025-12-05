@@ -695,7 +695,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
           // Update the FEN immediately (for visual consistency)
           setCurrentFen(tempGame.fen());
-          setCurrentMoveIndex(moves.length);
+          // setCurrentMoveIndex(moves.length);
 
           // Trigger animation in InteractiveBoard
           setExternalMove({
