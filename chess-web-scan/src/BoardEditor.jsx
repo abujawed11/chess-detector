@@ -250,7 +250,7 @@ function validateCompletePosition(pieces) {
   return { valid: errors.length === 0, errors };
 }
 
-export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage, onAnalyze }) {
+export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage, onAnalyze, onPlayComputer }) {
   const startFen = initialFen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   const seed = parseFenToState(startFen);
 
@@ -643,6 +643,20 @@ export default function BoardEditor({ initialFen, onDone, onCancel, overlayImage
               }}
             >
               Analyze Position
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => onPlayComputer?.(fen)}
+              disabled={!fenStatus.valid || validationErrors.length > 0}
+              icon="🤖"
+              style={{
+                background: (fenStatus.valid && validationErrors.length === 0)
+                  ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                  : '#ccc',
+                color: '#fff',
+                fontWeight: 600
+              }}
+            >
+              Play Computer
             </ToolbarBtn>
             <ToolbarBtn
               onClick={() => onDone?.(fen)}

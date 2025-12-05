@@ -24,6 +24,7 @@ function getPageFromHash() {
 export default function App(){
   const [currentPage, setCurrentPageState] = useState(getPageFromHash()) // Read from URL hash
   const [analysisFen, setAnalysisFen] = useState('') // FEN to analyze
+  const [autoStartPlayComputer, setAutoStartPlayComputer] = useState(false) // Auto-start Play Computer mode
   const [file, setFile] = useState(null)
   const [imgURL, setImgURL] = useState('')
   const [corners, setCorners] = useState(null)
@@ -230,6 +231,14 @@ export default function App(){
 
   function handleEditorAnalyze(fenToAnalyze){
     setAnalysisFen(fenToAnalyze)
+    setAutoStartPlayComputer(false) // Regular analysis mode
+    setShowEditor(false)
+    setCurrentPage('analysis')
+  }
+
+  function handleEditorPlayComputer(fenToPlay){
+    setAnalysisFen(fenToPlay)
+    setAutoStartPlayComputer(true) // Auto-start Play Computer mode
     setShowEditor(false)
     setCurrentPage('analysis')
   }
@@ -374,6 +383,7 @@ export default function App(){
           onDone={handleEditorDone}
           onCancel={handleEditorCancel}
           onAnalyze={handleEditorAnalyze}
+          onPlayComputer={handleEditorPlayComputer}
           overlayImage={overlayURL}
         />
         <FloatingQuickNav />
@@ -394,7 +404,10 @@ export default function App(){
           alignItems: 'center'
         }}>
           <button
-            onClick={() => setCurrentPage('home')}
+            onClick={() => {
+              setAutoStartPlayComputer(false); // Reset flag when leaving
+              setCurrentPage('home');
+            }}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
@@ -411,7 +424,7 @@ export default function App(){
             <ThemeSelector />
           </div>
         </nav>
-        <Analysis initialFen={analysisFen} onEditPosition={handleOpenEditor} />
+        <Analysis initialFen={analysisFen} autoStartPlayComputer={autoStartPlayComputer} onEditPosition={handleOpenEditor} />
         <FloatingQuickNav />
       </>
     );

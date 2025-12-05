@@ -71,7 +71,7 @@ const DIFFICULTY_LEVELS = [
   { name: 'Grandmaster', elo: 2500, depth: 22, skillLevel: 20, description: 'Elite strength - nearly perfect' },
 ];
 
-export default function Analysis({ initialFen, onEditPosition }) {
+export default function Analysis({ initialFen, onEditPosition, autoStartPlayComputer = false }) {
   const startFen = initialFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
   const [game] = useState(new Chess(startFen));
@@ -140,6 +140,13 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFen]);
+
+  // Auto-start Play Computer mode if requested from Board Editor
+  useEffect(() => {
+    if (autoStartPlayComputer && initialized) {
+      setShowPlayComputerModal(true);
+    }
+  }, [autoStartPlayComputer, initialized]);
 
   const analyzeCurrentPosition = useCallback(async (forceShowHint = false) => {
     if (!initialized) return;
