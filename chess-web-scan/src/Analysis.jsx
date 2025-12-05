@@ -1805,7 +1805,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
       {/* Play Computer mode indicator */}
       {playComputerMode && !computerThinking && (
-        <div className="fixed bottom-4 right-4 z-40 rounded-lg bg-emerald-600 px-4 py-3 text-white shadow-lg">
+        <div className="fixed bottom-4 left-4 z-40 rounded-lg bg-emerald-600 px-4 py-3 text-white shadow-lg">
           <div className="font-semibold">
             🤖 {whitePlayer === 'computer' && blackPlayer === 'computer'
               ? 'Computer vs Computer'

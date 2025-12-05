@@ -354,7 +354,7 @@ export default function InteractiveBoard({
       const isAnimatingFrom = animatingMove && animatingMove.from === square;
       const isAnimatingTo = animatingMove && animatingMove.to === square;
       const isCaptureSquare = capturedPiece && capturedPiece.square === square;
-      const shouldHidePiece = isAnimatingFrom || isAnimatingTo; // Hide piece during animation
+      const shouldHidePiece = isAnimatingFrom || isAnimatingTo; // Hide both source and destination during animation
 
       squares.push(
         <div
@@ -456,8 +456,8 @@ export default function InteractiveBoard({
             </div>
           )}
 
-          {/* Piece - hide if animating from/to this square */}
-          {piece && !shouldHidePiece && (
+          {/* Piece - use opacity to hide during animation (keeps in DOM for instant show) */}
+          {piece && (
             <img
               draggable
               onDragStart={(e) => handleDragStart(e, square)}
@@ -471,9 +471,9 @@ export default function InteractiveBoard({
                 padding: '8%',
                 cursor: piece.color === chess.turn() ? 'grab' : 'default',
                 userSelect: 'none',
-                pointerEvents: piece.color === chess.turn() ? 'auto' : 'none',
-                opacity: isCaptureSquare ? 0 : 1,
-                transition: isCaptureSquare ? 'opacity 0.3s ease-out' : 'none'
+                pointerEvents: piece.color === chess.turn() && !shouldHidePiece ? 'auto' : 'none',
+                opacity: shouldHidePiece || isCaptureSquare ? 0 : 1,
+                transition: 'none' // No transition for instant show/hide
               }}
             />
           )}
