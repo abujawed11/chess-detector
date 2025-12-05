@@ -544,6 +544,17 @@ export default function Analysis({ initialFen, onEditPosition }) {
           setStoredAnalysis(null);
         }
 
+        // Determine who played this move (human vs computer)
+        let playerType = 'human';
+        if (playComputerMode) {
+          const moveColor = move.color; // 'w' or 'b' from chess.js
+          if (moveColor === 'w') {
+            playerType = whitePlayer;
+          } else if (moveColor === 'b') {
+            playerType = blackPlayer;
+          }
+        }
+
         const newMove = {
           ...move,
           evaluation: result?.evaluation || null,
@@ -553,8 +564,23 @@ export default function Analysis({ initialFen, onEditPosition }) {
           isBrilliantV2: classification.isBrilliantV2,
           brilliantAnalysis: classification.brilliantAnalysis,
           explanation: explanation,
-          fullEvaluation: classification.fullEvaluation || null
+          fullEvaluation: classification.fullEvaluation || null,
+          // NEW: who played the move
+          player: playerType, // 'human' or 'computer'
         };
+
+
+        // const newMove = {
+        //   ...move,
+        //   evaluation: result?.evaluation || null,
+        //   classification: classification.classification,
+        //   classificationLabel: classification.label,
+        //   cpLoss: classification.cpLoss,
+        //   isBrilliantV2: classification.isBrilliantV2,
+        //   brilliantAnalysis: classification.brilliantAnalysis,
+        //   explanation: explanation,
+        //   fullEvaluation: classification.fullEvaluation || null
+        // };
 
         // Debug logging
         console.log('📝 Storing move:', {
@@ -608,7 +634,22 @@ export default function Analysis({ initialFen, onEditPosition }) {
         setIsProcessingMove(false);
       }
     },
-    [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove, analyzeMoveType, playComputerMode, computerDifficulty.depth, setSkillLevel]
+    // [initialized, currentFen, storedAnalysis, analyze, analysisDepth, showBestMove, analyzeMoveType, playComputerMode, computerDifficulty.depth, setSkillLevel]
+    [
+      initialized,
+      currentFen,
+      storedAnalysis,
+      analyze,
+      analysisDepth,
+      showBestMove,
+      analyzeMoveType,
+      playComputerMode,
+      computerDifficulty.depth,
+      setSkillLevel,
+      whitePlayer,
+      blackPlayer,
+    ]
+
   );
 
   // Function to make computer move
@@ -669,10 +710,13 @@ export default function Analysis({ initialFen, onEditPosition }) {
           });
 
           // Delay heavy processing until after animation completes
-          setTimeout(async () => {
-            await handleMove(moveResult, tempGame.fen());
-            setExternalMove(null);
-          }, 320); // After animation (300ms) + small buffer
+          // setTimeout(async () => {
+          //   await handleMove(moveResult, tempGame.fen());
+          //   setExternalMove(null);
+          // }, 320); // After animation (300ms) + small buffer
+          await handleMove(moveResult, tempGame.fen());
+          setExternalMove(null);
+
         }
       }
     } catch (err) {
@@ -713,9 +757,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
     }
 
     // Schedule computer move with delay
-    computerMoveTimeoutRef.current = setTimeout(() => {
-      makeComputerMove();
-    }, delay);
+    // computerMoveTimeoutRef.current = setTimeout(() => {
+    //   makeComputerMove();
+    // }, delay);
+    makeComputerMove();
+
 
     return () => {
       if (computerMoveTimeoutRef.current) {
@@ -885,18 +931,126 @@ export default function Analysis({ initialFen, onEditPosition }) {
   }, [game, moves, startFen, analyzeMoveType]);
 
   // Keyboard shortcuts for undo/redo and navigation
+  // useEffect(() => {
+  //   const handleKeyDown = (e) => {
+  //     // Ctrl+Z or Cmd+Z for Undo
+  //     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+  //       e.preventDefault();
+  //       if (currentMoveIndex > -1) {
+  //         navigateToMove(currentMoveIndex - 1);
+  //       }
+  //     }
+  //     // Ctrl+Y or Cmd+Shift+Z for Redo
+  //     if (((e.ctrlKey || e.metaKey) && e.key === 'y') ||
+  //       ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+  //       e.preventDefault();
+  //       if (currentMoveIndex < moves.length - 1) {
+  //         navigateToMove(currentMoveIndex + 1);
+  //       }
+  //     }
+  //     // Arrow keys for navigation
+  //     if (e.key === 'ArrowLeft') {
+  //       e.preventDefault();
+  //       if (currentMoveIndex > -1) {
+  //         navigateToMove(currentMoveIndex - 1);
+  //       }
+  //     }
+  //     if (e.key === 'ArrowRight') {
+  //       e.preventDefault();
+  //       if (currentMoveIndex < moves.length - 1) {
+  //         navigateToMove(currentMoveIndex + 1);
+  //       }
+  //     }
+  //   };
+
+  //   window.addEventListener('keydown', handleKeyDown);
+  //   return () => window.removeEventListener('keydown', handleKeyDown);
+  // }, [currentMoveIndex, moves.length, navigateToMove]);
+
+  // Helper: get who played a given move in the context of current settings
+  const getMovePlayer = useCallback(
+    (move) => {
+      if (!move) return null;
+      if (move.player) return move.player; // our new field
+
+      // Fallback for any legacy moves without .player
+      if (!playComputerMode) return 'human';
+      const color = move.color;
+      if (color === 'w') return whitePlayer;
+      if (color === 'b') return blackPlayer;
+      return null;
+    },
+    [playComputerMode, whitePlayer, blackPlayer]
+  );
+
+
+  const undoLast = useCallback(() => {
+    if (currentMoveIndex < 0) return;
+
+    // Always clear any pending computer move timeout on undo
+    if (computerMoveTimeoutRef.current) {
+      clearTimeout(computerMoveTimeoutRef.current);
+      computerMoveTimeoutRef.current = null;
+    }
+
+    // Analysis mode: one ply at a time (current behavior)
+    if (!playComputerMode) {
+      navigateToMove(currentMoveIndex - 1);
+      return;
+    }
+
+    // Play vs Computer mode:
+    // Default = undo full move pair (engine + human)
+    // Special case: human just moved, engine hasn't replied yet -> undo only that human move
+    const lastMove = moves[currentMoveIndex];
+    const lastPlayer = getMovePlayer(lastMove);
+
+    let targetIndex = currentMoveIndex - 1; // fallback to one ply
+
+    if (lastPlayer === 'computer') {
+      // Last move was engine -> undo engine + previous human move
+      targetIndex = currentMoveIndex - 2;
+    } else if (lastPlayer === 'human') {
+      // Last move was human
+      const prevMove = moves[currentMoveIndex - 1];
+      const prevPlayer = getMovePlayer(prevMove);
+
+      if (prevPlayer === 'computer') {
+        // Sequence ... [human, computer, human(last)]
+        // User almost always means: undo whole exchange (engine + our reply)
+        targetIndex = currentMoveIndex - 2;
+      } else {
+        // No engine move directly before this -> human moved and engine hasn't replied yet
+        // => undo just this human move
+        targetIndex = currentMoveIndex - 1;
+      }
+    }
+
+    if (targetIndex < -1) targetIndex = -1;
+    navigateToMove(targetIndex);
+  }, [
+    currentMoveIndex,
+    moves,
+    playComputerMode,
+    navigateToMove,
+    getMovePlayer,
+  ]);
+
+
+
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Ctrl+Z or Cmd+Z for Undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        if (currentMoveIndex > -1) {
-          navigateToMove(currentMoveIndex - 1);
-        }
+        undoLast();
       }
       // Ctrl+Y or Cmd+Shift+Z for Redo
-      if (((e.ctrlKey || e.metaKey) && e.key === 'y') ||
-          ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')
+      ) {
         e.preventDefault();
         if (currentMoveIndex < moves.length - 1) {
           navigateToMove(currentMoveIndex + 1);
@@ -905,9 +1059,7 @@ export default function Analysis({ initialFen, onEditPosition }) {
       // Arrow keys for navigation
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (currentMoveIndex > -1) {
-          navigateToMove(currentMoveIndex - 1);
-        }
+        undoLast();
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -919,7 +1071,10 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentMoveIndex, moves.length, navigateToMove]);
+  }, [currentMoveIndex, moves.length, navigateToMove, undoLast]);
+
+
+
 
   const resetToStart = useCallback(() => {
     game.reset();
@@ -974,6 +1129,11 @@ export default function Analysis({ initialFen, onEditPosition }) {
   };
 
   const gameOverState = checkGameOver();
+
+
+
+
+
   const isGameOver = gameOverState.isGameOver;
   const gameStatus = gameOverState.isCheckmate
     ? `Checkmate! ${gameOverState.turn === 'w' ? 'Black' : 'White'} wins`
@@ -1194,14 +1354,23 @@ export default function Analysis({ initialFen, onEditPosition }) {
 
             {/* Undo/Redo quick access buttons */}
             <div className="flex w-[680px] justify-center gap-2 mt-2">
-              <button
+              {/* <button
                 onClick={() => navigateToMove(currentMoveIndex - 1)}
                 disabled={currentMoveIndex === -1}
                 className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300 disabled:text-slate-500 transition-colors hover:bg-amber-700 disabled:hover:bg-slate-300"
                 title="Undo last move (Ctrl+Z)"
               >
                 ↶ Undo
+              </button> */}
+              <button
+                onClick={undoLast}
+                disabled={currentMoveIndex === -1}
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300 disabled:text-slate-500 transition-colors hover:bg-amber-700 disabled:hover:bg-slate-300"
+                title="Undo last move (Ctrl+Z)"
+              >
+                ↶ Undo
               </button>
+
               <button
                 onClick={() => navigateToMove(currentMoveIndex + 1)}
                 disabled={currentMoveIndex === moves.length - 1}
@@ -1288,8 +1457,8 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     <div
                       key={gate}
                       className={`rounded-md px-2 py-1 text-xs font-semibold ${passed
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-red-100 text-red-700 border border-red-300'
+                        ? 'bg-green-100 text-green-700 border border-green-300'
+                        : 'bg-red-100 text-red-700 border border-red-300'
                         }`}
                     >
                       {passed ? '✓' : '✗'} {gate}
@@ -1306,12 +1475,12 @@ export default function Analysis({ initialFen, onEditPosition }) {
                     <div
                       key={idx}
                       className={`${reason.includes('✓') || reason.includes('CONFIRMED')
-                          ? 'text-green-700 font-bold'
-                          : reason.includes('FAILED')
-                            ? 'text-red-700'
-                            : reason.includes('WEAK')
-                              ? 'text-orange-600'
-                              : 'text-slate-600'
+                        ? 'text-green-700 font-bold'
+                        : reason.includes('FAILED')
+                          ? 'text-red-700'
+                          : reason.includes('WEAK')
+                            ? 'text-orange-600'
+                            : 'text-slate-600'
                         }`}
                     >
                       {reason}
@@ -1482,22 +1651,20 @@ export default function Analysis({ initialFen, onEditPosition }) {
                   <button
                     type="button"
                     onClick={() => setWhitePlayer('human')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
-                      whitePlayer === 'human'
-                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
-                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
-                    }`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${whitePlayer === 'human'
+                      ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                      : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
+                      }`}
                   >
                     👤 Human
                   </button>
                   <button
                     type="button"
                     onClick={() => setWhitePlayer('computer')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
-                      whitePlayer === 'computer'
-                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
-                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
-                    }`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${whitePlayer === 'computer'
+                      ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                      : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
+                      }`}
                   >
                     🤖 Computer
                   </button>
@@ -1513,22 +1680,20 @@ export default function Analysis({ initialFen, onEditPosition }) {
                   <button
                     type="button"
                     onClick={() => setBlackPlayer('human')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
-                      blackPlayer === 'human'
-                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
-                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
-                    }`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${blackPlayer === 'human'
+                      ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                      : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
+                      }`}
                   >
                     👤 Human
                   </button>
                   <button
                     type="button"
                     onClick={() => setBlackPlayer('computer')}
-                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${
-                      blackPlayer === 'computer'
-                        ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
-                        : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
-                    }`}
+                    className={`flex-1 rounded-lg px-4 py-3 font-bold transition border-4 ${blackPlayer === 'computer'
+                      ? 'bg-blue-600! text-white! border-blue-800! shadow-lg'
+                      : 'bg-white! text-slate-700! border-slate-300! hover:border-slate-400!'
+                      }`}
                   >
                     🤖 Computer
                   </button>
@@ -1547,39 +1712,34 @@ export default function Analysis({ initialFen, onEditPosition }) {
                         key={level.name}
                         type="button"
                         onClick={() => setComputerDifficulty(level)}
-                        className={`w-full rounded-lg p-3 text-left transition-all border-2 ${
-                          computerDifficulty.name === level.name
-                            ? 'bg-green-500 border-green-600 shadow-lg transform scale-[1.02]'
-                            : 'bg-white border-slate-300 hover:border-green-400 hover:shadow'
-                        }`}
+                        className={`w-full rounded-lg p-3 text-left transition-all border-2 ${computerDifficulty.name === level.name
+                          ? 'bg-green-500 border-green-600 shadow-lg transform scale-[1.02]'
+                          : 'bg-white border-slate-300 hover:border-green-400 hover:shadow'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className={`font-bold ${
-                                computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
-                              }`}>
+                              <span className={`font-bold ${computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
+                                }`}>
                                 {level.name}
                               </span>
                               {computerDifficulty.name === level.name && (
                                 <span className="text-white text-lg">✓</span>
                               )}
                             </div>
-                            <div className={`text-xs mt-0.5 ${
-                              computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-600'
-                            }`}>
+                            <div className={`text-xs mt-0.5 ${computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-600'
+                              }`}>
                               {level.description}
                             </div>
                           </div>
                           <div className="text-right ml-3">
-                            <div className={`text-sm font-bold ${
-                              computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
-                            }`}>
+                            <div className={`text-sm font-bold ${computerDifficulty.name === level.name ? 'text-white' : 'text-slate-900'
+                              }`}>
                               {level.elo}
                             </div>
-                            <div className={`text-xs ${
-                              computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-500'
-                            }`}>
+                            <div className={`text-xs ${computerDifficulty.name === level.name ? 'text-green-100' : 'text-slate-500'
+                              }`}>
                               ELO
                             </div>
                           </div>
