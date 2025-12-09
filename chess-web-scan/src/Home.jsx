@@ -98,7 +98,7 @@ export default function Home({ onNavigate }) {
 
   return (
     <div 
-      className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+      className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -130,11 +130,11 @@ export default function Home({ onNavigate }) {
           <nav className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src={chessIcon} alt="Chess Scanner" className="h-12 w-12 object-contain" />
-              <h1 className="text-2xl font-bold text-white">Chess Analyzer Pro</h1>
+              <h1 className="text-2xl font-bold text-white">Chess Scanner Pro</h1>
             </div>
             <div className="flex gap-3 items-center">
               <ThemeSelector />
-              <a
+              {/* <a
                 href="https://github.com"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -142,7 +142,7 @@ export default function Home({ onNavigate }) {
               >
                 <span className="mr-2">⭐</span>
                 GitHub
-              </a>
+              </a> */}
             </div>
           </nav>
 
@@ -151,7 +151,7 @@ export default function Home({ onNavigate }) {
             <h2 className="text-5xl font-extrabold tracking-tight text-white sm:text-6xl md:text-7xl">
               Your Complete
               <br />
-              <span className="bg-gradient-to-r from-purple-400 via-pink-500 to-amber-500 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-purple-400 via-pink-500 to-amber-500 bg-clip-text text-transparent">
                 Chess Toolkit
               </span>
             </h2>
@@ -163,7 +163,7 @@ export default function Home({ onNavigate }) {
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
               <button
                 onClick={() => onNavigate('scanner')}
-                className="group flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-xl transition hover:scale-105 hover:shadow-2xl"
+                className="group flex items-center gap-2 rounded-xl bg-linear-to-r from-purple-600 to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-xl transition hover:scale-105 hover:shadow-2xl"
               >
                 <span className="text-2xl">📷</span>
                 Upload Image
@@ -200,7 +200,7 @@ export default function Home({ onNavigate }) {
               }}
             >
               {/* Gradient overlay on hover */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 transition group-hover:opacity-10`} />
+              <div className={`absolute inset-0 bg-linear-to-br ${feature.color} opacity-0 transition group-hover:opacity-10`} />
               
               <div className="relative">
                 {/* Icon */}
@@ -258,8 +258,8 @@ export default function Home({ onNavigate }) {
       {/* Footer */}
       <footer className="relative border-t border-white/10 py-8">
         <div className="mx-auto max-w-7xl px-6 text-center text-sm text-slate-400">
-          <p>Built with ♟️ Chess.js, Stockfish 17.1, and React</p>
-          <p className="mt-2">© 2025 Chess Analyzer Pro. All rights reserved.</p>
+          {/* <p>Built with ♟️ Chess.js, Stockfish 17.1, and React</p> */}
+          <p className="mt-2">© 2025 Chess Scanner Pro. All rights reserved.</p>
         </div>
       </footer>
     </div>

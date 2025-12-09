@@ -642,7 +642,7 @@ export default function App(){
         <h3 style={{ color: 'white', margin: 0 }}>Chess Image Scanner</h3>
          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
            <ThemeSelector />
-           <button
+           {/* <button
              onClick={() => setCurrentPage('scanner')}
              style={{
                padding: '8px 16px',
@@ -667,8 +667,8 @@ export default function App(){
              }}
            >
              Analysis
-           </button>
-           <button
+           </button> */}
+           {/* <button
              onClick={() => setCurrentPage('test')}
              style={{
                padding: '8px 16px',
@@ -680,8 +680,8 @@ export default function App(){
              }}
            >
              🧪 Test Suite
-           </button>
-           <button
+           </button> */}
+           {/* <button
              onClick={() => setCurrentPage('stockfish-analysis')}
              style={{
                padding: '8px 16px',
@@ -693,8 +693,8 @@ export default function App(){
              }}
            >
              ⚡ SF Analysis
-           </button>
-           <button
+           </button> */}
+           {/* <button
              onClick={() => setCurrentPage('engine-test')}
              style={{
                padding: '8px 16px',
@@ -706,7 +706,7 @@ export default function App(){
              }}
            >
              🚀 Engine Test
-           </button>
+           </button> */}
          </div>
       </nav>
 

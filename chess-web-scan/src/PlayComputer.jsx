@@ -347,7 +347,7 @@ export default function PlayComputer() {
   const generatePGN = useCallback(() => {
     const headers = [
       '[Event "Play vs Computer"]',
-      '[Site "Chess Analyzer Pro"]',
+      '[Site "Chess Scanner Pro"]',
       `[Date "${new Date().toISOString().split('T')[0].replace(/-/g, '.')}"]`,
       '[Round "1"]',
       `[White "${playerColor === 'w' ? 'Player' : `Stockfish (${difficulty.elo})`}"]`,
