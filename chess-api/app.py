@@ -19,8 +19,30 @@ import hashlib
 from fastapi import Request
 
 # Import auth and database modules
-from database import init_db, create_user, get_user_by_username, get_user_by_email
+from database import (
+    init_db, create_user, get_user_by_username, get_user_by_email, clear_ip_usage
+)
 from auth import hash_password, verify_password, create_access_token, validate_password_strength
+
+# ============= IP Helper Function =============
+def get_client_ip(request: Request) -> str:
+    """
+    Extract client IP address from request
+    Handles X-Forwarded-For header for proxied requests
+    """
+    # Check X-Forwarded-For header (for proxied requests)
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # X-Forwarded-For can contain multiple IPs, get the first one (client IP)
+        return forwarded.split(",")[0].strip()
+
+    # Check X-Real-IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    # Fall back to direct connection IP
+    return request.client.host if request.client else "unknown"
 
 
 # Setup logging
@@ -114,9 +136,13 @@ class LoginResponse(BaseModel):
 
 # ============= Auth Endpoints =============
 @app.post("/auth/signup", response_model=SignupResponse)
-async def signup(data: SignupRequest):
+async def signup(request: Request, data: SignupRequest):
     """User signup endpoint"""
     try:
+        # Get client IP
+        client_ip = get_client_ip(request)
+        logger.info(f"Signup attempt from IP: {client_ip}")
+
         # Validate passwords match
         if data.password != data.confirm_password:
             raise HTTPException(status_code=400, detail="Passwords do not match")
@@ -134,9 +160,13 @@ async def signup(data: SignupRequest):
         if get_user_by_email(data.email):
             raise HTTPException(status_code=400, detail="Email already exists")
 
-        # Hash password and create user
+        # Hash password and create user with IP
         password_hash = hash_password(data.password)
-        user_id = create_user(data.username, data.email, password_hash)
+        user_id = create_user(data.username, data.email, password_hash, client_ip)
+
+        # Clear IP usage limit for this IP (they signed up, so unlimited access now)
+        clear_ip_usage(client_ip)
+        logger.info(f"Cleared IP usage limit for new user: {data.username}")
 
         # Create JWT token
         token = create_access_token({"user_id": user_id, "username": data.username})
@@ -157,9 +187,13 @@ async def signup(data: SignupRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/auth/login", response_model=LoginResponse)
-async def login(data: LoginRequest):
+async def login(request: Request, data: LoginRequest):
     """User login endpoint"""
     try:
+        # Get client IP
+        client_ip = get_client_ip(request)
+        logger.info(f"Login attempt from IP: {client_ip}")
+
         # Get user by username
         user = get_user_by_username(data.username)
 
@@ -169,6 +203,10 @@ async def login(data: LoginRequest):
         # Verify password
         if not verify_password(data.password, user['password_hash']):
             raise HTTPException(status_code=401, detail="Invalid username or password")
+
+        # Clear IP usage limit for this IP (they logged in, so unlimited access)
+        clear_ip_usage(client_ip)
+        logger.info(f"Cleared IP usage limit for logged in user: {data.username}")
 
         # Create JWT token
         token = create_access_token({"user_id": user['id'], "username": user['username']})
@@ -204,8 +242,6 @@ async def infer(
     try:
         import json
         import time
-
-        request_start = time.time()
 
         request_start = time.time()
 
@@ -414,6 +450,7 @@ async def engine_status():
 
 @app.post("/analyze")
 async def analyze_position(
+    request: Request,
     fen: str = Form(...),
     depth: int = Form(18),
     multipv: int = Form(3)
@@ -807,6 +844,7 @@ def analyze_or_fail(fen: str, depth: int, multipv: int, engine):
 
 @app.post("/evaluate")
 async def evaluate_move(
+    request: Request,
     fen: str = Form(...),
     move: str = Form(...),
     depth: int = Form(18),

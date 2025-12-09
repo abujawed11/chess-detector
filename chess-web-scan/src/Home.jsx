@@ -9,17 +9,6 @@ import chessIcon from './assets/chess-icon.png';
 export default function Home({ onNavigate, user, onLogout }) {
   const [isDragging, setIsDragging] = useState(false);
 
-  // Helper function to check authentication before navigating
-  const handleFeatureClick = (targetPage) => {
-    if (!user) {
-      // Redirect to login if not authenticated
-      onNavigate('login');
-    } else {
-      // Navigate to the tool if authenticated
-      onNavigate(targetPage);
-    }
-  };
-
   const features = [
     {
       id: 'image-scan',
@@ -27,7 +16,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Upload a photo of any chess board and instantly get the FEN notation',
       icon: '📷',
       color: 'from-purple-500 to-purple-700',
-      action: () => handleFeatureClick('scanner')
+      action: () => onNavigate('scanner')
     },
     {
       id: 'pgn-upload',
@@ -35,7 +24,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Upload a PGN file to analyze an entire chess game with detailed move classifications',
       icon: '📄',
       color: 'from-blue-500 to-blue-700',
-      action: () => handleFeatureClick('pgn-analysis')
+      action: () => onNavigate('pgn-analysis')
     },
         {
       id: 'fen-upload',
@@ -43,7 +32,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Paste or upload a FEN string to load any chess position instantly',
       icon: '📝',
       color: 'from-indigo-500 to-indigo-700',
-      action: () => handleFeatureClick('fen-upload')
+      action: () => onNavigate('fen-upload')
     },
     {
       id: 'play-computer',
@@ -51,7 +40,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Challenge Stockfish 17.1 at different ELO levels - from beginner to grandmaster',
       icon: '🤖',
       color: 'from-green-500 to-green-700',
-      action: () => handleFeatureClick('play-computer')
+      action: () => onNavigate('play-computer')
     },
     {
       id: 'play-human',
@@ -59,7 +48,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Play against a friend locally with move analysis and evaluation',
       icon: '👥',
       color: 'from-amber-500 to-amber-700',
-      action: () => handleFeatureClick('analysis')
+      action: () => onNavigate('analysis')
     },
     {
       id: 'position-analysis',
@@ -67,7 +56,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Deep position analysis with brilliant move detection and evaluation',
       icon: '🔬',
       color: 'from-teal-500 to-teal-700',
-      action: () => handleFeatureClick('analysis')
+      action: () => onNavigate('analysis')
     },
 
     {
@@ -76,7 +65,7 @@ export default function Home({ onNavigate, user, onLogout }) {
       description: 'Test the move classification system on famous chess positions',
       icon: '🧪',
       color: 'from-rose-500 to-rose-700',
-      action: () => handleFeatureClick('test')
+      action: () => onNavigate('test')
     }
   ];
 
@@ -192,7 +181,7 @@ export default function Home({ onNavigate, user, onLogout }) {
             {/* Quick action buttons */}
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
               <button
-                onClick={() => handleFeatureClick('scanner')}
+                onClick={() => onNavigate('scanner')}
                 className="group flex items-center gap-2 rounded-xl bg-linear-to-r from-purple-600 to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-xl transition hover:scale-105 hover:shadow-2xl"
               >
                 <span className="text-2xl">📷</span>
@@ -200,7 +189,7 @@ export default function Home({ onNavigate, user, onLogout }) {
                 <span className="ml-2 transition group-hover:translate-x-1">→</span>
               </button>
               <button
-                onClick={() => handleFeatureClick('analysis')}
+                onClick={() => onNavigate('analysis')}
                 className="flex items-center gap-2 rounded-xl border-2 border-white/30 bg-white/10 px-8 py-4 text-lg font-bold text-white backdrop-blur-sm transition hover:scale-105 hover:bg-white/20"
               >
                 <span className="text-2xl">🎯</span>
@@ -232,13 +221,6 @@ export default function Home({ onNavigate, user, onLogout }) {
               {/* Gradient overlay on hover */}
               <div className={`absolute inset-0 bg-linear-to-br ${feature.color} opacity-0 transition group-hover:opacity-10`} />
 
-              {/* Lock badge if not logged in */}
-              {!user && (
-                <div className="absolute top-4 right-4 rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm shadow-lg">
-                  🔒 Login Required
-                </div>
-              )}
-
               <div className="relative">
                 {/* Icon */}
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-white/10 text-4xl backdrop-blur">
@@ -251,7 +233,7 @@ export default function Home({ onNavigate, user, onLogout }) {
 
                 {/* Arrow */}
                 <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-purple-400 transition group-hover:gap-3">
-                  {user ? 'Get Started' : 'Login to Access'}
+                  Get Started
                   <span className="transition group-hover:translate-x-1">→</span>
                 </div>
               </div>

@@ -102,8 +102,12 @@ export default function App(){
       fd.append('file', f)
       fd.append('flip_ranks', 'false')
       // Don't request overlay for initial corner detection - much faster!
-      const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
+      const res = await fetch(`${API_BASE_URL}/infer`, {
+        method:'POST',
+        body: fd
+      })
       const json = await res.json()
+
       if(res.ok && json.board_corners) {
         setCorners(json.board_corners)
       } else {
@@ -164,8 +168,12 @@ export default function App(){
         const fd = new FormData()
         fd.append('file', file)
         fd.append('flip_ranks', 'false')
-        const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
+        const res = await fetch(`${API_BASE_URL}/infer`, {
+          method:'POST',
+          body: fd
+        })
         const json = await res.json()
+
         if(res.ok && json.board_corners) {
           setCorners(json.board_corners)
         } else {
@@ -204,7 +212,10 @@ export default function App(){
       fd.append('include_overlay', '1')  // ✅ Request overlay for preview in board editor (1 = True)
 
       console.log('🚀 Requesting FEN with include_overlay=true')
-      const res = await fetch(`${API_BASE_URL}/infer`, { method:'POST', body: fd })
+      const res = await fetch(`${API_BASE_URL}/infer`, {
+        method:'POST',
+        body: fd
+      })
       const json = await res.json()
       console.log('📦 Response received:', {
         hasFen: !!json.fen,
