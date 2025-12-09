@@ -17,6 +17,7 @@ from pydantic import BaseModel, EmailStr
 
 import hashlib
 from fastapi import Request
+import traceback
 
 # Import auth and database modules
 from database import (
@@ -134,6 +135,102 @@ class LoginResponse(BaseModel):
     user: dict
     token: str
 
+# # ============= Auth Endpoints =============
+# @app.post("/auth/signup", response_model=SignupResponse)
+# async def signup(request: Request, data: SignupRequest):
+#     """User signup endpoint"""
+#     try:
+#         # Get client IP
+#         client_ip = get_client_ip(request)
+#         logger.info(f"Signup attempt from IP: {client_ip}")
+
+#         # Validate passwords match
+#         if data.password != data.confirm_password:
+#             raise HTTPException(status_code=400, detail="Passwords do not match")
+
+#         # Validate password strength
+#         is_valid, msg = validate_password_strength(data.password)
+#         if not is_valid:
+#             raise HTTPException(status_code=400, detail=msg)
+
+#         # Check if username already exists
+#         if get_user_by_username(data.username):
+#             raise HTTPException(status_code=400, detail="Username already exists")
+
+#         # Check if email already exists
+#         if get_user_by_email(data.email):
+#             raise HTTPException(status_code=400, detail="Email already exists")
+
+#         # Hash password and create user with IP
+#         password_hash = hash_password(data.password)
+#         user_id = create_user(data.username, data.email, password_hash, client_ip)
+
+#         # Clear IP usage limit for this IP (they signed up, so unlimited access now)
+#         clear_ip_usage(client_ip)
+#         logger.info(f"Cleared IP usage limit for new user: {data.username}")
+
+#         # Create JWT token
+#         token = create_access_token({"user_id": user_id, "username": data.username})
+
+#         return SignupResponse(
+#             message="User created successfully",
+#             user={
+#                 "id": user_id,
+#                 "username": data.username,
+#                 "email": data.email
+#             },
+#             token=token
+#         )
+#     except ValueError as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"Signup error: {str(e)}")
+#         raise HTTPException(status_code=500, detail="Internal server error")
+
+# @app.post("/auth/login", response_model=LoginResponse)
+# async def login(request: Request, data: LoginRequest):
+#     """User login endpoint"""
+#     try:
+#         # Get client IP
+#         client_ip = get_client_ip(request)
+#         logger.info(f"Login attempt from IP: {client_ip}")
+
+#         # Get user by username
+#         user = get_user_by_username(data.username)
+
+#         if not user:
+#             raise HTTPException(status_code=401, detail="Invalid username or password")
+
+#         # Verify password
+#         if not verify_password(data.password, user['password_hash']):
+#             raise HTTPException(status_code=401, detail="Invalid username or password")
+
+#         # Clear IP usage limit for this IP (they logged in, so unlimited access)
+#         clear_ip_usage(client_ip)
+#         logger.info(f"Cleared IP usage limit for logged in user: {data.username}")
+
+#         # Create JWT token
+#         token = create_access_token({"user_id": user['id'], "username": user['username']})
+
+#         return LoginResponse(
+#             message="Login successful",
+#             user={
+#                 "id": user['id'],
+#                 "username": user['username'],
+#                 "email": user['email']
+#             },
+#             token=token
+#         )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Login error: {str(e)}")
+#         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+
+
+
 # ============= Auth Endpoints =============
 @app.post("/auth/signup", response_model=SignupResponse)
 async def signup(request: Request, data: SignupRequest):
@@ -145,24 +242,29 @@ async def signup(request: Request, data: SignupRequest):
 
         # Validate passwords match
         if data.password != data.confirm_password:
+            logger.info("Signup blocked: passwords do not match")
             raise HTTPException(status_code=400, detail="Passwords do not match")
 
         # Validate password strength
         is_valid, msg = validate_password_strength(data.password)
         if not is_valid:
+            logger.info(f"Signup blocked: weak password -> {msg}")
             raise HTTPException(status_code=400, detail=msg)
 
         # Check if username already exists
         if get_user_by_username(data.username):
+            logger.info(f"Signup blocked: username already exists -> {data.username}")
             raise HTTPException(status_code=400, detail="Username already exists")
 
         # Check if email already exists
         if get_user_by_email(data.email):
+            logger.info(f"Signup blocked: email already exists -> {data.email}")
             raise HTTPException(status_code=400, detail="Email already exists")
 
         # Hash password and create user with IP
         password_hash = hash_password(data.password)
         user_id = create_user(data.username, data.email, password_hash, client_ip)
+        logger.info(f"New user created: id={user_id}, username={data.username}")
 
         # Clear IP usage limit for this IP (they signed up, so unlimited access now)
         clear_ip_usage(client_ip)
@@ -180,11 +282,24 @@ async def signup(request: Request, data: SignupRequest):
             },
             token=token
         )
+
+    # IMPORTANT: let HTTPException pass through as-is (for proper 400/401/etc.)
+    except HTTPException as e:
+        logger.error(f"Signup HTTPException: {e.status_code} {e.detail}")
+        raise
+
+    # ValueError from create_user (e.g. username/email exists via UNIQUE constraint)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        logger.error(f"Signup ValueError: {msg}")
+        raise HTTPException(status_code=400, detail=msg)
+
+    # Everything else is truly unexpected → 500
     except Exception as e:
-        logger.error(f"Signup error: {str(e)}")
+        logger.error(f"Signup unexpected error: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.post("/auth/login", response_model=LoginResponse)
 async def login(request: Request, data: LoginRequest):
@@ -198,10 +313,12 @@ async def login(request: Request, data: LoginRequest):
         user = get_user_by_username(data.username)
 
         if not user:
+            logger.info(f"Login failed: user not found -> {data.username}")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Verify password
         if not verify_password(data.password, user['password_hash']):
+            logger.info(f"Login failed: wrong password -> {data.username}")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Clear IP usage limit for this IP (they logged in, so unlimited access)
@@ -220,11 +337,17 @@ async def login(request: Request, data: LoginRequest):
             },
             token=token
         )
-    except HTTPException:
+
+    # keep HTTPExceptions as-is so frontend sees correct 401 + message
+    except HTTPException as e:
+        logger.error(f"Login HTTPException: {e.status_code} {e.detail}")
         raise
+
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.error(f"Login unexpected error: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.get("/health")
 def health():
