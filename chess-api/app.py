@@ -156,6 +156,38 @@ async def signup(data: SignupRequest):
         logger.error(f"Signup error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.post("/auth/login", response_model=LoginResponse)
+async def login(data: LoginRequest):
+    """User login endpoint"""
+    try:
+        # Get user by username
+        user = get_user_by_username(data.username)
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
+        # Verify password
+        if not verify_password(data.password, user['password_hash']):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
+        # Create JWT token
+        token = create_access_token({"user_id": user['id'], "username": user['username']})
+
+        return LoginResponse(
+            message="Login successful",
+            user={
+                "id": user['id'],
+                "username": user['username'],
+                "email": user['email']
+            },
+            token=token
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/health")
 def health():
     return {"ok": True}

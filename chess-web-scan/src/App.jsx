@@ -12,6 +12,7 @@ import PGNAnalysis from './PGNAnalysis'
 import FENUpload from './FENUpload'
 import PlayComputer from './PlayComputer'
 import Signup from './Signup'
+import Login from './Login'
 import ThemeSelector from './components/ThemeSelector'
 import { API_BASE_URL } from './config/api'
 
@@ -51,6 +52,11 @@ export default function App(){
   }, []);
 
   const handleSignupSuccess = (userData, token) => {
+    setUser(userData);
+    setAuthToken(token);
+  };
+
+  const handleLoginSuccess = (userData, token) => {
     setUser(userData);
     setAuthToken(token);
   };
@@ -398,6 +404,11 @@ export default function App(){
   // Show Signup page
   if (currentPage === 'signup') {
     return <Signup onNavigate={setCurrentPage} onSignupSuccess={handleSignupSuccess} />;
+  }
+
+  // Show Login page
+  if (currentPage === 'login') {
+    return <Login onNavigate={setCurrentPage} onLoginSuccess={handleLoginSuccess} />;
   }
 
   // Show Home page
