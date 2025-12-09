@@ -6,7 +6,7 @@ import chessIcon from './assets/chess-icon.png';
  * Home / Landing Page
  * Beautiful landing page with all chess tools and features
  */
-export default function Home({ onNavigate }) {
+export default function Home({ onNavigate, user, onLogout }) {
   const [isDragging, setIsDragging] = useState(false);
 
   const features = [
@@ -134,15 +134,26 @@ export default function Home({ onNavigate }) {
             </div>
             <div className="flex gap-3 items-center">
               <ThemeSelector />
-              {/* <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
-              >
-                <span className="mr-2">⭐</span>
-                GitHub
-              </a> */}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-white text-sm">
+                    Welcome, <strong>{user.username}</strong>
+                  </span>
+                  <button
+                    onClick={onLogout}
+                    className="rounded-lg bg-red-600/80 hover:bg-red-600 px-4 py-2 text-sm font-semibold text-white transition"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onNavigate('signup')}
+                  className="rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 px-4 py-2 text-sm font-semibold text-white transition shadow-lg"
+                >
+                  Sign Up
+                </button>
+              )}
             </div>
           </nav>
 

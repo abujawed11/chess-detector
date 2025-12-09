@@ -5,7 +5,7 @@ import time
 import asyncio
 from typing import Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
@@ -13,9 +13,14 @@ from io import BytesIO
 from inference import Detector
 import logging
 import chess
+from pydantic import BaseModel, EmailStr
 
 import hashlib
 from fastapi import Request
+
+# Import auth and database modules
+from database import init_db, create_user, get_user_by_username, get_user_by_email
+from auth import hash_password, verify_password, create_access_token, validate_password_strength
 
 
 # Setup logging
@@ -82,6 +87,74 @@ persistent_engine = None
 
 # Lock to serialize engine access and prevent race conditions during batch analysis
 engine_lock = asyncio.Lock()
+
+# Initialize database on startup
+init_db()
+
+# ============= Pydantic Models for Auth =============
+class SignupRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+class SignupResponse(BaseModel):
+    message: str
+    user: dict
+    token: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    message: str
+    user: dict
+    token: str
+
+# ============= Auth Endpoints =============
+@app.post("/auth/signup", response_model=SignupResponse)
+async def signup(data: SignupRequest):
+    """User signup endpoint"""
+    try:
+        # Validate passwords match
+        if data.password != data.confirm_password:
+            raise HTTPException(status_code=400, detail="Passwords do not match")
+
+        # Validate password strength
+        is_valid, msg = validate_password_strength(data.password)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=msg)
+
+        # Check if username already exists
+        if get_user_by_username(data.username):
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # Check if email already exists
+        if get_user_by_email(data.email):
+            raise HTTPException(status_code=400, detail="Email already exists")
+
+        # Hash password and create user
+        password_hash = hash_password(data.password)
+        user_id = create_user(data.username, data.email, password_hash)
+
+        # Create JWT token
+        token = create_access_token({"user_id": user_id, "username": data.username})
+
+        return SignupResponse(
+            message="User created successfully",
+            user={
+                "id": user_id,
+                "username": data.username,
+                "email": data.email
+            },
+            token=token
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Signup error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/health")
 def health():

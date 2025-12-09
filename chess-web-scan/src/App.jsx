@@ -11,13 +11,14 @@ import Home from './Home'
 import PGNAnalysis from './PGNAnalysis'
 import FENUpload from './FENUpload'
 import PlayComputer from './PlayComputer'
+import Signup from './Signup'
 import ThemeSelector from './components/ThemeSelector'
 import { API_BASE_URL } from './config/api'
 
 // Helper to get page from URL hash
 function getPageFromHash() {
   const hash = window.location.hash.slice(1); // Remove '#'
-  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload', 'play-computer'];
+  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload', 'play-computer', 'signup', 'login'];
   return validPages.includes(hash) ? hash : 'home';
 }
 
@@ -35,7 +36,32 @@ export default function App(){
   const [busy, setBusy] = useState(false)
   const [stage, setStage] = useState('upload') // 'upload', 'adjust', 'result'
   const [showEditor, setShowEditor] = useState(false)
+  const [user, setUser] = useState(null) // Current logged-in user
+  const [authToken, setAuthToken] = useState(null) // JWT token
   const inputRef = useRef(null)
+
+  // Check for existing auth on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const storedUser = localStorage.getItem('user');
+    if (token && storedUser) {
+      setAuthToken(token);
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+  const handleSignupSuccess = (userData, token) => {
+    setUser(userData);
+    setAuthToken(token);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setAuthToken(null);
+    setCurrentPage('home');
+  };
 
   // Custom setCurrentPage that also updates URL hash
   const setCurrentPage = useCallback((page) => {
@@ -369,9 +395,14 @@ export default function App(){
     );
   };
 
+  // Show Signup page
+  if (currentPage === 'signup') {
+    return <Signup onNavigate={setCurrentPage} onSignupSuccess={handleSignupSuccess} />;
+  }
+
   // Show Home page
   if (currentPage === 'home') {
-    return <Home onNavigate={setCurrentPage} />;
+    return <Home onNavigate={setCurrentPage} user={user} onLogout={handleLogout} />;
   }
 
   // Show board editor if active
