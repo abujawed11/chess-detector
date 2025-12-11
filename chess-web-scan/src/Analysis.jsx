@@ -10,6 +10,7 @@ import MoveHistory from './components/MoveHistory';
 import EngineLines from './components/EngineLines';
 import MoveExplanationCard from './components/MoveExplanationCard';
 import MoveDetailsPanel from './components/MoveDetailsPanel';
+import CapturedPieces from './components/CapturedPieces';
 // REMOVED: Old classification imports (now using backend)
 // Backend handles all classification via /evaluate endpoint
 import { evaluateMove, getMoveBadge, getMoveExplanation } from './services/evaluationService';
@@ -1298,6 +1299,13 @@ export default function Analysis({ initialFen, onEditPosition, autoStartPlayComp
 
           {/* Board column */}
           <div className="flex flex-col gap-3">
+            {/* Captured pieces - Top */}
+            <CapturedPieces
+              fen={currentFen}
+              side={flipped ? 'white' : 'black'}
+              flipBoard={flipped}
+            />
+
             <div className="relative flex items-center justify-center">
               <InteractiveBoard
                 fen={currentFen}
@@ -1322,6 +1330,13 @@ export default function Analysis({ initialFen, onEditPosition, autoStartPlayComp
                 </div>
               )}
             </div>
+
+            {/* Captured pieces - Bottom */}
+            <CapturedPieces
+              fen={currentFen}
+              side={flipped ? 'black' : 'white'}
+              flipBoard={flipped}
+            />
 
             {/* Move navigation */}
             <div className="flex w-[680px] justify-center gap-2">
