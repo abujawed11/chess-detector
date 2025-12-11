@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import asyncio
+import json
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
@@ -21,9 +22,10 @@ import traceback
 
 # Import auth and database modules
 from database import (
-    init_db, create_user, get_user_by_username, get_user_by_email, clear_ip_usage
+    init_db, create_user, get_user_by_username, get_user_by_email, clear_ip_usage,
+    create_audit_log, get_audit_logs, get_audit_logs_count
 )
-from auth import hash_password, verify_password, create_access_token, validate_password_strength
+from auth import hash_password, verify_password, create_access_token, validate_password_strength, decode_token
 
 # ============= IP Helper Function =============
 def get_client_ip(request: Request) -> str:
@@ -44,6 +46,42 @@ def get_client_ip(request: Request) -> str:
 
     # Fall back to direct connection IP
     return request.client.host if request.client else "unknown"
+
+
+# ============= Auth Helper Functions =============
+def get_current_user(request: Request) -> Optional[dict]:
+    """
+    Extract and verify JWT token from Authorization header
+    Returns user payload if valid, None otherwise
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+
+    # Expected format: "Bearer <token>"
+    parts = auth_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    token = parts[1]
+    payload = decode_token(token)
+    return payload
+
+
+def require_admin(request: Request) -> dict:
+    """
+    Verify user is admin, raise HTTPException if not
+    Returns user payload if valid admin
+    """
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    username = user.get("username")
+    if username != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return user
 
 
 # Setup logging
@@ -251,6 +289,11 @@ async def signup(request: Request, data: SignupRequest):
             logger.info(f"Signup blocked: weak password -> {msg}")
             raise HTTPException(status_code=400, detail=msg)
 
+        # Block 'admin' username for normal users
+        if data.username.lower() == "admin":
+            logger.info(f"Signup blocked: reserved username 'admin'")
+            raise HTTPException(status_code=400, detail="Username 'admin' is reserved")
+
         # Check if username already exists
         if get_user_by_username(data.username):
             logger.info(f"Signup blocked: username already exists -> {data.username}")
@@ -347,6 +390,89 @@ async def login(request: Request, data: LoginRequest):
         logger.error(f"Login unexpected error: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============= Admin Endpoints =============
+@app.get("/admin/audit-logs")
+async def get_admin_audit_logs(
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+    action_type: Optional[str] = None
+):
+    """
+    Get audit logs - Admin only endpoint
+
+    Query Parameters:
+        limit: Maximum number of logs to return (default: 100)
+        offset: Number of logs to skip (default: 0)
+        action_type: Filter by action type (optional)
+    """
+    try:
+        # Verify admin access
+        require_admin(request)
+
+        logger.info(f"Admin audit logs request: limit={limit}, offset={offset}, action_type={action_type}")
+
+        # Get logs and count
+        logs = get_audit_logs(limit=limit, offset=offset, action_type=action_type)
+        total_count = get_audit_logs_count(action_type=action_type)
+
+        # Parse JSON details for each log
+        for log in logs:
+            if log.get('details'):
+                try:
+                    log['details'] = json.loads(log['details'])
+                except:
+                    pass  # Keep as string if parsing fails
+
+        return JSONResponse({
+            "logs": logs,
+            "total": total_count,
+            "limit": limit,
+            "offset": offset
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching audit logs: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
+
+
+@app.get("/admin/audit-stats")
+async def get_admin_audit_stats(request: Request):
+    """
+    Get audit log statistics - Admin only endpoint
+    """
+    try:
+        # Verify admin access
+        require_admin(request)
+
+        logger.info("Admin audit stats request")
+
+        # Get counts by action type
+        total = get_audit_logs_count()
+        image_scans = get_audit_logs_count(action_type="image_scan")
+        move_evaluations = get_audit_logs_count(action_type="move_evaluation")
+        position_analysis = get_audit_logs_count(action_type="position_analysis")
+
+        return JSONResponse({
+            "total": total,
+            "by_action_type": {
+                "image_scan": image_scans,
+                "move_evaluation": move_evaluations,
+                "position_analysis": position_analysis
+            }
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching audit stats: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to fetch audit stats")
 
 
 @app.get("/health")
@@ -455,9 +581,54 @@ async def infer(
         else:
             logger.info(f"⏭️ Skipping overlay encoding (include_overlay=False)")
 
+        # Create audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "filename": file.filename,
+                "file_size": size_bytes,
+                "file_hash": sha256,
+                "fen": result.get('fen', 'N/A'),
+                "pieces_detected": result.get('num_pieces', 0),
+                "flip_ranks": flip_ranks,
+                "user_agent": user_agent,
+                "client_tag": client_tag
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="image_scan",
+                endpoint="/infer",
+                details=audit_details,
+                status="success"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create audit log: {audit_error}")
+
         return JSONResponse(result)
     except Exception as e:
         logger.error(f"❌ Error in /infer: {str(e)}", exc_info=True)
+
+        # Create error audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "filename": file.filename if file else "unknown",
+                "error": str(e)
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="image_scan",
+                endpoint="/infer",
+                details=audit_details,
+                status="error"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create error audit log: {audit_error}")
+
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
@@ -703,6 +874,29 @@ async def analyze_position(
         elapsed = time.time() - start_time
         logger.info(f"✅ /analyze complete in {elapsed:.2f}s: eval={evaluation} bestMove={best_move}")
 
+        # Create audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "fen": fen[:60],
+                "depth": depth,
+                "multipv": multipv,
+                "best_move": best_move,
+                "evaluation": evaluation,
+                "elapsed_time": round(elapsed, 2)
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="position_analysis",
+                endpoint="/analyze",
+                details=audit_details,
+                status="success"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create audit log: {audit_error}")
+
         return JSONResponse({
             "evaluation": evaluation,
             "lines": lines,
@@ -715,6 +909,26 @@ async def analyze_position(
 
     except Exception as e:
         logger.error(f"Error in /analyze: {str(e)}", exc_info=True)
+
+        # Create error audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "fen": fen if 'fen' in locals() else "unknown",
+                "error": str(e)
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="position_analysis",
+                endpoint="/analyze",
+                details=audit_details,
+                status="error"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create error audit log: {audit_error}")
+
         return JSONResponse({
             "error": "ANALYSIS_FAILED",
             "message": str(e)
@@ -1309,6 +1523,33 @@ async def evaluate_move(
 
 
         print("Label: ", label)
+
+        # Create audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "fen": fen_before[:60],
+                "move": move,
+                "label": label,
+                "eval_before": eval_before_cp,
+                "eval_after": eval_after_cp,
+                "depth": depth,
+                "multipv": multipv,
+                "is_sacrifice": is_sacrifice,
+                "is_book": book_for_move
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="move_evaluation",
+                endpoint="/evaluate",
+                details=audit_details,
+                status="success"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create audit log: {audit_error}")
+
         return JSONResponse({
             "fen_before": fen_before,
             "eval_before": eval_before_cp,
@@ -1338,6 +1579,27 @@ async def evaluate_move(
 
     except Exception as e:
         logger.error(f"Error in /evaluate: {str(e)}", exc_info=True)
+
+        # Create error audit log
+        try:
+            client_ip = get_client_ip(request)
+            audit_details = json.dumps({
+                "fen": fen if 'fen' in locals() else "unknown",
+                "move": move if 'move' in locals() else "unknown",
+                "error": str(e)
+            })
+            create_audit_log(
+                user_id=None,
+                username=None,
+                ip_address=client_ip,
+                action_type="move_evaluation",
+                endpoint="/evaluate",
+                details=audit_details,
+                status="error"
+            )
+        except Exception as audit_error:
+            logger.error(f"⚠️ Failed to create error audit log: {audit_error}")
+
         return JSONResponse({
             "error": "EVALUATION_FAILED",
             "message": str(e),

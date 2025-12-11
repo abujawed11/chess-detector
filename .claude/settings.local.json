@@ -14,7 +14,11 @@
       "Bash(python:*)",
       "Bash(curl:*)",
       "Bash(timeout:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(ls -la \"D:\\react\\chess-detector\\chess-web-scan\\src\"\" | grep -E \".jsx)",
+      "Bash(.js \")",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

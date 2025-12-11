@@ -13,13 +13,14 @@ import FENUpload from './FENUpload'
 import PlayComputer from './PlayComputer'
 import Signup from './Signup'
 import Login from './Login'
+import AdminPanel from './AdminPanel'
 import ThemeSelector from './components/ThemeSelector'
 import { API_BASE_URL } from './config/api'
 
 // Helper to get page from URL hash
 function getPageFromHash() {
   const hash = window.location.hash.slice(1); // Remove '#'
-  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload', 'play-computer', 'signup', 'login'];
+  const validPages = ['home', 'scanner', 'analysis', 'test', 'stockfish-analysis', 'engine-test', 'pgn-analysis', 'fen-upload', 'play-computer', 'signup', 'login', 'admin'];
   return validPages.includes(hash) ? hash : 'home';
 }
 
@@ -420,6 +421,11 @@ export default function App(){
   // Show Login page
   if (currentPage === 'login') {
     return <Login onNavigate={setCurrentPage} onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Show Admin Panel
+  if (currentPage === 'admin') {
+    return <AdminPanel onNavigate={setCurrentPage} onLogout={handleLogout} />;
   }
 
   // Show Home page

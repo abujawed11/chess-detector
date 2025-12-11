@@ -45,8 +45,12 @@ export default function Login({ onNavigate, onLoginSuccess }) {
         onLoginSuccess(data.user, data.token);
       }
 
-      // Navigate to home
-      onNavigate('home');
+      // Redirect admin to admin panel, others to home
+      if (data.user.username === 'admin') {
+        onNavigate('admin');
+      } else {
+        onNavigate('home');
+      }
     } catch (err) {
       setError(err.message);
     } finally {

@@ -273,6 +273,22 @@ def init_db():
             )
         """)
 
+        # Create audit logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                ip_address TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                endpoint TEXT,
+                details TEXT,
+                status TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+
         conn.commit()
         logger.info(f"✅ Database initialized at {DB_PATH}")
 
@@ -458,3 +474,120 @@ def check_ip_limit(ip: str, max_usage: int = 5) -> tuple[bool, int]:
         )
 
         return (is_allowed, remaining)
+
+
+# ============= Audit Logging Functions =============
+
+def create_audit_log(
+    user_id: int = None,
+    username: str = None,
+    ip_address: str = None,
+    action_type: str = None,
+    endpoint: str = None,
+    details: str = None,
+    status: str = "success"
+):
+    """
+    Create an audit log entry
+
+    Args:
+        user_id: User ID if authenticated (None for anonymous)
+        username: Username if authenticated (None for anonymous)
+        ip_address: Client IP address
+        action_type: Type of action (e.g., 'image_scan', 'move_evaluation', 'position_analysis')
+        endpoint: API endpoint called
+        details: JSON string with additional details
+        status: 'success' or 'error'
+    """
+    logger.info(f"📝 Creating audit log: action={action_type}, user={username or 'anonymous'}, ip={ip_address}")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO audit_logs
+                (user_id, username, ip_address, action_type, endpoint, details, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, username, ip_address, action_type, endpoint, details, status, datetime.utcnow())
+            )
+            conn.commit()
+            log_id = cursor.lastrowid
+            logger.info(f"✅ Audit log created with id={log_id}")
+            return log_id
+        except Exception as e:
+            logger.error(f"❌ Error creating audit log: {e}")
+            logger.error(traceback.format_exc())
+            raise
+
+
+def get_audit_logs(limit: int = 100, offset: int = 0, action_type: str = None):
+    """
+    Get audit logs with optional filtering
+
+    Args:
+        limit: Maximum number of logs to return
+        offset: Number of logs to skip
+        action_type: Filter by action type (optional)
+
+    Returns:
+        List of audit log dictionaries
+    """
+    logger.info(f"📋 Fetching audit logs: limit={limit}, offset={offset}, action_type={action_type}")
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if action_type:
+            cursor.execute(
+                """SELECT * FROM audit_logs
+                WHERE action_type = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?""",
+                (action_type, limit, offset)
+            )
+        else:
+            cursor.execute(
+                """SELECT * FROM audit_logs
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?""",
+                (limit, offset)
+            )
+
+        rows = cursor.fetchall()
+        logs = [dict(row) for row in rows]
+        logger.info(f"📋 Retrieved {len(logs)} audit logs")
+        return logs
+
+
+def get_audit_logs_count(action_type: str = None):
+    """Get total count of audit logs"""
+    logger.info(f"🔢 Getting audit logs count: action_type={action_type}")
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if action_type:
+            cursor.execute("SELECT COUNT(*) as count FROM audit_logs WHERE action_type = ?", (action_type,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM audit_logs")
+
+        result = cursor.fetchone()
+        count = result['count']
+        logger.info(f"🔢 Total audit logs: {count}")
+        return count
+
+
+def get_audit_logs_by_user(user_id: int, limit: int = 50):
+    """Get audit logs for a specific user"""
+    logger.info(f"👤 Fetching audit logs for user_id={user_id}, limit={limit}")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT * FROM audit_logs
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?""",
+            (user_id, limit)
+        )
+
+        rows = cursor.fetchall()
+        logs = [dict(row) for row in rows]
+        logger.info(f"👤 Retrieved {len(logs)} audit logs for user")
+        return logs
