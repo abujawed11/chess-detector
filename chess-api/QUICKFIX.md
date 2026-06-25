@@ -34,6 +34,7 @@ This will tell you exactly what's wrong. If all checks pass, proceed to Step 2.
 
 ```bash
 cd chess-api
+.\venv\Scripts\Activate.ps1
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
